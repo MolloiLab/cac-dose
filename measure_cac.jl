@@ -521,6 +521,12 @@ exposure_tag = (0x0018, 0x1151)
 # ╔═╡ e2364ef8-b54b-4673-b537-1133b36b5185
 header[exposure_tag]
 
+# ╔═╡ 7f9f9eb3-c114-44e4-b180-3cb079ec0689
+x_space, y_space = header[(0x0028, 0x0030)]
+
+# ╔═╡ a2d407f4-d0b3-478d-9842-07afb8ca2f49
+slice_thickness = header[(0x0018, 0x0050)]
+
 # ╔═╡ 8b9f13af-e0e4-4541-a40e-a254591ff66d
 md"""
 !!! warning
@@ -528,7 +534,8 @@ md"""
 """
 
 # ╔═╡ 3aa34879-2562-4509-95f6-ef0bab905f59
-pixel_size = [0.5, 0.5, 0.5]
+# pixel_size = [0.5, 0.5, 0.5]
+pixel_size = [x_space, y_space, slice_thickness]
 
 # ╔═╡ f6b964f5-252d-4a6e-8b68-9b11246f02f9
 md"""
@@ -2760,6 +2767,8 @@ version = "3.5.0+0"
 # ╠═427d7e29-fdaf-4792-a062-344c3735ad2b
 # ╠═03f0e7af-f702-4ab0-8a5d-fa1cd6e15aba
 # ╠═e2364ef8-b54b-4673-b537-1133b36b5185
+# ╠═7f9f9eb3-c114-44e4-b180-3cb079ec0689
+# ╠═a2d407f4-d0b3-478d-9842-07afb8ca2f49
 # ╟─8b9f13af-e0e4-4541-a40e-a254591ff66d
 # ╠═3aa34879-2562-4509-95f6-ef0bab905f59
 # ╟─f6b964f5-252d-4a6e-8b68-9b11246f02f9
