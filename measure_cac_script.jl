@@ -575,6 +575,9 @@ md"""
 Type the folder path above, where you want the DICOM files to be saved (or use a temporary directory via `mktempdir()`) in the code cell below. Then type in the instance number that you want to download and click "Submit".
 """
 
+# ╔═╡ 4beb3247-28f0-4b30-b925-0061253ee304
+output_dir_temp = mktempdir()
+
 # ╔═╡ 87bc30a2-7b7e-4877-8618-aac5b44f88db
 function download_info(acc, ser, inst, save_folder_path)
 	
@@ -591,7 +594,7 @@ function download_info(acc, ser, inst, save_folder_path)
 				Child(TextField(default="1"))
 			)""",
 			md""" $(save_folder_path): $(
-				Child(TextField(default="/Users/daleblack/Desktop/dcms")))
+				Child(TextField(default=output_dir_temp)))
 			)"""
 		]
 		
@@ -2557,6 +2560,7 @@ version = "3.5.0+0"
 # ╟─b7807c48-6abe-416e-bbd9-5922e9044f33
 # ╟─87bc30a2-7b7e-4877-8618-aac5b44f88db
 # ╟─bb89a69b-35fc-4b42-a36c-9ac7640476c8
+# ╠═4beb3247-28f0-4b30-b925-0061253ee304
 # ╠═e0e10a0c-464b-4185-bff7-d0a4e577cae1
 # ╠═a23a7779-6b79-444c-a172-33afdf5fa204
 # ╠═850df889-4876-4018-bf79-9de790d10091
