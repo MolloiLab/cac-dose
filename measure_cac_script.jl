@@ -17,6 +17,9 @@ end
 # ╔═╡ 7879e86f-e900-45de-a7ba-5e768760d1b1
 using DataFrames: DataFrame, rename!, nrow
 
+# ╔═╡ c089c448-09c1-459c-8c88-07b021e1b6f5
+using CSV: write
+
 # ╔═╡ 7ede2cbc-c82a-40c4-86be-ac7c61c14f03
 using StaticArrays: SVector
 
@@ -633,6 +636,11 @@ instances_dicts
 # ╔═╡ 986a7b15-a441-412f-88a7-25f9648cfcbc
 instance_number = parse(Int64, instance_num)
 
+# ╔═╡ 39471e4c-b923-4f08-8d71-c9c79f19c866
+md"""
+## Load DICOMs
+"""
+
 # ╔═╡ 876f4307-63fa-4b2a-8ca2-c338a95403db
 for i in 1:length(instances_dicts)
 	path = joinpath(output_dir, string(series_num_vec[i]))
@@ -647,30 +655,39 @@ md"""
 # Run Script
 """
 
-# ╔═╡ 552c03dc-caca-4039-9fc6-87774601c80d
+# ╔═╡ 19b23f93-48b3-4c39-bcee-32b03d4f6f50
 begin
-	results_df = DataFrame(
-		mAs = Float64[],
-	    gt_mass = Float64[],
-	    vf_mass = Float64[],
-	    agatston_mass = Float64[]
+    results_df = DataFrame(
+        insert_name = String[],
+        beats_per_minute = String[],
+        mAs = Float64[],
+        gt_mass = Float64[],
+        vf_mass = Float64[],
+        agatston_mass = Float64[]
     )
-	
-	for i in 1:length(series_num_vec)
+
+	local insert_name
+	local beats_per_minute
+    for i in 1:length(series_num_vec)
 		@info i
 		output_path = joinpath(output_dir, readdir(output_dir)[i])
-
+	
 		# Load DICOMs
 		dcms = dcmdir_parse(output_path)
 		dcm_arr = load_dcm_array(dcms)
-
+	
 		header = dcms[1].meta
+		scan_name = header[(0x0010, 0x0020)]
+		insert_name = split(split(scan_name, "_")[2], "-")[1]
+		# beats_per_minute = split(scan_name, "_")[3]
+		beats_per_minute = "0bpm"
+		
 		mAs = header[(0x0018, 0x1151)]
 		kV = header[(0x0018, 0x0060)]
 		x_space, y_space = header[(0x0028, 0x0030)]
 		slice_thickness = header[(0x0018, 0x0050)]
 		pixel_size = [x_space, y_space, slice_thickness]
-
+	
 		# Mask Heart
 		half_x, half_y = size(dcm_arr, 1) ÷ 2, size(dcm_arr, 2) ÷ 2
 		init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 140)
@@ -685,7 +702,7 @@ begin
 		centroids = centroids_from_mask(heart_cv)
 		heart_rad = 100
 		heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad)
-
+	
 		# Inserts
 		dcm_heart = dcm_arr .* heart_mask
 		centers_a, centers_b = get_insert_centers(dcm_heart, 200)
@@ -693,47 +710,66 @@ begin
 		
 		_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, 12, -25)
 		background_ring = Bool.(_background_ring .- cylinder)
-
+	
 		binary_calibration = falses(size(dcm_heart))
 		binary_calibration[centers_a...] = true
 		binary_calibration = dilate(binary_calibration)
 		dcm_heart_clean = remove_outliers(dcm_heart[cylinder])
-
+	
 		# Ground truth mass
-		scan_name = header[(0x0010, 0x0020)]
-		insert_name = split(split(scan_name, "_")[2], "-")[1]
-
-		if insert_name == "F"
+		## Extract density
+		if insert_name == "A" || insert_name == "B" || insert_name == "C"
+			gt_density = 0.050  # mg/mm^3
+		elseif insert_name == "D" || insert_name == "E" || insert_name == "F"
 			gt_density = 0.100  # mg/mm^3
-			diameter = 5 # mm
 		end
+
+		## Extract diameter
+		if insert_name == "A" || insert_name == "D"
+			diameter = 1.2 # mm
+		elseif insert_name == "B" || insert_name == "E"
+			diameter = 3.0 # mm
+		elseif insert_name == "C" || insert_name == "F"
+			diameter = 5.0 # mm
+		end
+		
 		num_inserts = 3
-		gt_length = 7 #mm
+		gt_length = 7 # mm
 		gt_volume = π * (diameter/2)^2 * gt_length * num_inserts # mm^3
 		gt_mass = gt_density * gt_volume
-
+	
 		# Volume fraction mass
+		## Extract "calibration" from the endpoint inserts (ρ: 400 mg/cc)
 		hu_calcium_400 = mean(dcm_heart[binary_calibration])
 		ρ_calcium_400 = 0.400 # mg/mm^3
+
+		## Calculate
 		voxel_size = pixel_size[1] * pixel_size[2] * pixel_size[3]
 		hu_heart_tissue_bkg = mean(dcm_heart[background_ring])
 		vf_mass = score(dcm_heart_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
-
-		# Agatston mass
+	
+		# Agatston
 		mass_cal_factor = ρ_calcium_400 / hu_calcium_400
 		agatston_agatston, agatston_volume, agatston_mass = score(dcm_heart_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
-
+	
 		# Push results to DataFrame
-		push!(results_df, [mAs, gt_mass, vf_mass, agatston_mass])
-	end
+		push!(results_df, [insert_name, beats_per_minute, mAs, gt_mass, vf_mass, agatston_mass])
+    end
+
+	output_filename = joinpath(pwd(),"data","$(insert_name)_$(beats_per_minute).csv")
+    write(output_filename, results_df)
 end
 
-# ╔═╡ bccbab32-c313-489a-9d69-5822de7030d7
+# ╔═╡ 4951072e-5546-4825-a12c-bb917df5995c
 results_df
+
+# ╔═╡ cfff3b8b-4b23-426f-849d-04a39c1dfde4
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CalciumScoring = "9c0cb1da-21b1-4615-967b-153e03110a28"
 DICOM = "a26e6606-dd52-5f6a-a97f-4f611373d757"
@@ -751,6 +787,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
+CSV = "~0.10.14"
 CairoMakie = "~0.12.2"
 CalciumScoring = "~0.4.0"
 DICOM = "~0.11.0"
@@ -772,7 +809,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "bdc5b22dd6cf4d1f774aa5dc00f87305ec08efb7"
+project_hash = "8871edfc7be21ef62bc97ae841d6d9fcac7a16c7"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -910,6 +947,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "e329286945d0cfc04456972ea732551869af1cfc"
 uuid = "4e9b3aee-d8a1-5a3d-ad8b-7d824db253f0"
 version = "1.0.1+0"
+
+[[deps.CSV]]
+deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "PrecompileTools", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
+git-tree-sha1 = "6c834533dc1fabd820c1db03c839bf97e45a3fab"
+uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+version = "0.10.14"
 
 [[deps.Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
@@ -2354,11 +2397,22 @@ git-tree-sha1 = "e863582a41c5731f51fd050563ae91eb33cf09be"
 uuid = "3d5dd08c-fd9d-11e8-17fa-ed2836048c2f"
 version = "0.21.68"
 
+[[deps.WeakRefStrings]]
+deps = ["DataAPI", "InlineStrings", "Parsers"]
+git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
+uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
+version = "1.4.2"
+
 [[deps.WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "c1a7aa6219628fcd757dede0ca95e245c5cd9511"
 uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
 version = "1.0.0"
+
+[[deps.WorkerUtilities]]
+git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
+uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
+version = "1.6.1"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
@@ -2505,6 +2559,7 @@ version = "3.5.0+0"
 # ╟─beda1edb-4fea-40d1-8bbc-c49953952698
 # ╟─a214f633-3699-4fe6-bca4-02de420d3c1d
 # ╠═7879e86f-e900-45de-a7ba-5e768760d1b1
+# ╠═c089c448-09c1-459c-8c88-07b021e1b6f5
 # ╠═7ede2cbc-c82a-40c4-86be-ac7c61c14f03
 # ╠═8d24da97-a7ab-4fb8-b37b-c48c6c3d3f70
 # ╠═b8c49cef-c730-464b-b17c-005afdf0fdbe
@@ -2558,18 +2613,20 @@ version = "3.5.0+0"
 # ╟─6dae0032-6a60-4421-a68e-a94c44416e6e
 # ╟─6030b8c8-d10b-442b-875c-c9e8f5bd016a
 # ╟─b7807c48-6abe-416e-bbd9-5922e9044f33
+# ╠═4beb3247-28f0-4b30-b925-0061253ee304
 # ╟─87bc30a2-7b7e-4877-8618-aac5b44f88db
 # ╟─bb89a69b-35fc-4b42-a36c-9ac7640476c8
-# ╠═4beb3247-28f0-4b30-b925-0061253ee304
 # ╠═e0e10a0c-464b-4185-bff7-d0a4e577cae1
 # ╠═a23a7779-6b79-444c-a172-33afdf5fa204
 # ╠═850df889-4876-4018-bf79-9de790d10091
 # ╠═061edd0d-31a1-4f9a-842e-9b3c113d6e4b
 # ╠═1cbc8875-8b23-4660-8eb6-543f31436c73
 # ╠═986a7b15-a441-412f-88a7-25f9648cfcbc
+# ╟─39471e4c-b923-4f08-8d71-c9c79f19c866
 # ╠═876f4307-63fa-4b2a-8ca2-c338a95403db
 # ╟─8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
-# ╠═552c03dc-caca-4039-9fc6-87774601c80d
-# ╠═bccbab32-c313-489a-9d69-5822de7030d7
+# ╠═19b23f93-48b3-4c39-bcee-32b03d4f6f50
+# ╠═4951072e-5546-4825-a12c-bb917df5995c
+# ╠═cfff3b8b-4b23-426f-849d-04a39c1dfde4
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
