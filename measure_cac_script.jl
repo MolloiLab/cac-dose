@@ -351,6 +351,33 @@ function download_instances(
 	@info "Files located at $(output_directory)"
 end
 
+# ╔═╡ 69c5661c-77c0-4b6b-b0bc-3cf1512b7c60
+function process_instances(
+	instances_dicts, series_num_vec, output_dir, instance_number, ip_address
+)
+    if !isdir(output_dir)
+        mkpath(output_dir)
+    end
+
+    output_paths = String[]
+
+	for (idx, dict) in enumerate(instances_dicts)
+		_series = collect(keys(dict))[1]
+		
+	    path = joinpath(output_dir, string(series_num_vec[idx]))
+	    if !isdir(path)
+	        mkpath(path)
+	    end
+		
+	    download_instances(instances_dicts[idx], instance_number, path, ip_address)
+	
+	    output_path = joinpath(output_dir, string(_series))
+		push!(output_paths, output_path)
+	end
+
+    return output_paths
+end
+
 # ╔═╡ da41d9b3-e124-4ef8-81e0-d3e5eea52337
 md"""
 #### Mask Heart Function
@@ -397,6 +424,20 @@ function centroids_from_mask(mask)
 		new_mask[i] = 1
 	end
 	centroids = Int.(round.(component_centroids(label_components(new_mask))[end]))
+end
+
+# ╔═╡ 3f695cba-2572-4a50-b76a-80fec1056692
+function create_initial_level_set(dcm_arr)
+	half_x, half_y = size(dcm_arr, 1) ÷ 2, size(dcm_arr, 2) ÷ 2
+	init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 140)
+	
+	init_mask = BitArray(undef, size(dcm_arr))
+	for z in axes(dcm_arr, 3)
+		init_mask[:, :, z] = init_circle
+	end
+	init_mask = init_mask .* initial_level_set(size(init_mask))
+
+	return init_mask
 end
 
 # ╔═╡ c33aaaa0-6a87-41b4-86ed-669016382b6e
@@ -2573,10 +2614,12 @@ version = "3.5.0+0"
 # ╠═b139733c-638e-40e5-877e-5b2033838f18
 # ╠═a75ef71d-c5de-4614-bb76-09355919d783
 # ╠═08774908-cb99-4673-8470-7881301da059
+# ╠═69c5661c-77c0-4b6b-b0bc-3cf1512b7c60
 # ╟─da41d9b3-e124-4ef8-81e0-d3e5eea52337
 # ╠═17f9ba72-aa80-4ff5-9de2-83512b6c49ce
 # ╠═7b84a208-0a59-4aeb-9506-df5eff303305
 # ╠═cdb712cf-12ee-4e9d-9d04-16f4af14bbd8
+# ╠═3f695cba-2572-4a50-b76a-80fec1056692
 # ╟─c33aaaa0-6a87-41b4-86ed-669016382b6e
 # ╠═c9648ed4-44a2-41c0-b019-e8d68e2a7a6a
 # ╠═e62f58f7-141f-4c1a-94e0-561d95eec28b

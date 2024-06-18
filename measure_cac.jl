@@ -53,6 +53,9 @@ using ImageCore: channelview
 # ╔═╡ e6bce302-1120-4eef-9e38-58f1411f9fc1
 using OrderedCollections: OrderedDict
 
+# ╔═╡ 6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
+using DataInterpolations
+
 # ╔═╡ 61628bac-5eeb-4832-aacb-c461ad0a7dcb
 using CairoMakie: hist
 
@@ -352,6 +355,33 @@ function download_instances(
 end
 
 
+# ╔═╡ 3b33d6cd-61fe-4fa3-a9fd-124db9abfded
+function process_instances(
+	instances_dicts, series_num_vec, output_dir, instance_number, ip_address
+)
+    if !isdir(output_dir)
+        mkpath(output_dir)
+    end
+
+    output_paths = String[]
+
+	for (idx, dict) in enumerate(instances_dicts)
+		_series = collect(keys(dict))[1]
+		
+	    path = joinpath(output_dir, string(series_num_vec[idx]))
+	    if !isdir(path)
+	        mkpath(path)
+	    end
+		
+	    download_instances(instances_dicts[idx], instance_number, path, ip_address)
+	
+	    output_path = joinpath(output_dir, string(_series))
+		push!(output_paths, output_path)
+	end
+
+    return output_paths
+end
+
 # ╔═╡ 58c2113f-6eb3-4ab4-a232-3c35281a0023
 md"""
 ## Docs
@@ -461,33 +491,6 @@ end
 
 # ╔═╡ 6ae680bf-4cdb-4d6d-986a-2923049da688
 instance_number = parse(Int64, instance_num)
-
-# ╔═╡ 3b33d6cd-61fe-4fa3-a9fd-124db9abfded
-function process_instances(
-	instances_dicts, series_num_vec, output_dir, instance_number, ip_address
-)
-    if !isdir(output_dir)
-        mkpath(output_dir)
-    end
-
-    output_paths = String[]
-
-	for (idx, dict) in enumerate(instances_dicts)
-		_series = collect(keys(dict))[1]
-		
-	    path = joinpath(output_dir, string(series_num_vec[idx]))
-	    if !isdir(path)
-	        mkpath(path)
-	    end
-		
-	    download_instances(instances_dicts[idx], instance_number, path, ip_address)
-	
-	    output_path = joinpath(output_dir, string(_series))
-		push!(output_paths, output_path)
-	end
-
-    return output_paths
-end
 
 # ╔═╡ c8dc5fc6-ec31-4aa4-9d98-92306f5fbc65
 output_paths = process_instances(instances_dicts, series_num_vec, output_dir, instance_number, ip_address)
@@ -613,25 +616,53 @@ heart_cv = chan_vese(dcm_arr; μ = 0.25, λ₁ = 1.0, λ₂ = 1.0, init_level_se
 # ╔═╡ fa7d3528-460f-4129-96c2-12d08774bc59
 md"""
 !!! danger ""
+	- kV: 80, mAs: 10 => `threshold_low = 100`, `threshold_high = 300`
 	- kV: 80, mAs: 15 => `threshold_low = 100`, `threshold_high = 300`
+	- kV: 80, mAs: 20 => 
+	- kV: 80, mAs: 25 => 
+	- kV: 80, mAs: 30 => 
 	- kV: 80, mAs: 40 => `threshold_low = 50`, `threshold_high = 180`
+	- kV: 80, mAs: 50 =>
+	- kV: 80, mAs: 100 =>
+	- kV: 80, mAs: 150 =>
+	- kV: 80, mAs: 250 => `threshold_low = 0`, `threshold_high = 40`
+"""
+
+# ╔═╡ 0f03911c-14e8-47f2-ab16-3601cc80125a
+mA = [10, 40, 250] # independent var
+
+# ╔═╡ 7bb08c11-910b-4f81-835a-0e2c27ff8970
+threshold_low_kV80 = [100, 50, 0] # dependent var1
+
+# ╔═╡ 8eab6127-5c1f-41a6-a98a-127eadd93d7d
+threshold_high_kV80 = [300, 180, 40] # dependent var2
+
+# ╔═╡ ee8809b2-9e37-417f-b887-afe016fcf8c7
+threshold_low_kV80_interp = QuadraticInterpolation(threshold_low_kV80, mA; extrapolate = true)
+
+# ╔═╡ 3d6311e7-7b42-4a8a-a23c-34b28b99d170
+threshold_high_kV80_interp = QuadraticInterpolation(threshold_high_kV80, mA; extrapolate = true)
+
+# ╔═╡ a802a052-e032-41f8-bbf0-40c6b365b162
+function threshold_low_high(
+	dcm_arr, heart_cv;
+	threshold_low = threshold_low_kV80_interp(mAs), threshold_high = threshold_high_kV80_interp(mAs)
+)
+	
+	thresholded_mask_low = dcm_arr .> threshold_low
+	thresholded_mask_high = dcm_arr .< threshold_high
+	masked_thresholded = thresholded_mask_high .& thresholded_mask_low .& heart_cv
+	return masked_thresholded
+end
+
+# ╔═╡ c80194a0-62d9-48af-ab4c-74c059c48b5f
+md"""
+!!! danger ""
 	- kV: 100, mAs: 25 => `threshold_low = 100`, `threshold_high = 200`
 	- kV: 100, mAs: 250 => `threshold_low = 50`, `threshold_high = 200`
 	- kV: 120, mAs: 150 => `threshold_low = 25`, `threshold_high = 100`
 	- kV: 120, mAs: 250 => `threshold_low = 50`, `threshold_high = 200`
 """
-
-# ╔═╡ a802a052-e032-41f8-bbf0-40c6b365b162
-function threshold_low_high(
-	dcm_arr, heart_cv;
-	threshold_low = 50, threshold_high = 200
-)
-	
-	global thresholded_mask_low = dcm_arr .> threshold_low
-	global thresholded_mask_high = dcm_arr .< threshold_high
-	masked_thresholded = thresholded_mask_high .& thresholded_mask_low .& heart_cv
-	return masked_thresholded
-end
 
 # ╔═╡ afa766f2-eeef-4963-a1e5-93f576500d0f
 masked_thresholded = threshold_low_high(dcm_arr, heart_cv);
@@ -752,12 +783,16 @@ end
 # ╔═╡ 24b17874-2e77-49f9-8452-121a63f12feb
 md"""
 !!! danger ""
-	- mAs: 15, kV: 80 => `insert_threshold = 400`
-	- mAs: 150, kV: 120 => `insert_threshold = 200`
+	- kV: 80, mAs: 10 => `insert_threshold = 500`
+	- kV: 80, mAs: 15 => `insert_threshold = 400`
+
+
+
+	- kV: 120, mAs: 150, => `insert_threshold = 200`
 """
 
 # ╔═╡ c018a0fe-ac18-4491-90ab-aad4ba19af39
-insert_threshold = 400
+insert_threshold = 500
 
 # ╔═╡ d45ddd4d-5bde-42cf-b072-d0f66078c335
 centers_a, centers_b = get_insert_centers(dcm_heart, insert_threshold);
@@ -1003,6 +1038,7 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CalciumScoring = "9c0cb1da-21b1-4615-967b-153e03110a28"
 DICOM = "a26e6606-dd52-5f6a-a97f-4f611373d757"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 ImageCore = "a09fc81d-aa75-5fe9-8630-4744c3626534"
 ImageMorphology = "787d08f9-d448-5407-9aad-5290dd7ab264"
@@ -1020,6 +1056,7 @@ CairoMakie = "~0.12.2"
 CalciumScoring = "~0.4.0"
 DICOM = "~0.10.1"
 DataFrames = "~1.6.1"
+DataInterpolations = "~5.2.0"
 HTTP = "~1.10.8"
 ImageCore = "~0.10.2"
 ImageMorphology = "~0.4.5"
@@ -1037,7 +1074,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "6b1a24262f2840f261ebb89a7b7e49d5088d7b5f"
+project_hash = "2b324f4ca813f66415a6472237cc182ba2012675"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1262,6 +1299,12 @@ git-tree-sha1 = "362a287c3aa50601b0bc359053d5c2468f0e7ce0"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.11"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
 git-tree-sha1 = "b1c55339b7c6c350ee89f2c1604299660525b248"
@@ -1332,6 +1375,24 @@ git-tree-sha1 = "04c738083f29f86e62c8afc341f0967d8717bdb8"
 uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 version = "1.6.1"
 
+[[deps.DataInterpolations]]
+deps = ["FindFirstFunctions", "ForwardDiff", "LinearAlgebra", "PrettyTables", "RecipesBase", "Reexport"]
+git-tree-sha1 = "a47492f3694b8cd647a9a172a5111f585868f2c6"
+uuid = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
+version = "5.2.0"
+
+    [deps.DataInterpolations.extensions]
+    DataInterpolationsChainRulesCoreExt = "ChainRulesCore"
+    DataInterpolationsOptimExt = "Optim"
+    DataInterpolationsRegularizationToolsExt = "RegularizationTools"
+    DataInterpolationsSymbolicsExt = "Symbolics"
+
+    [deps.DataInterpolations.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+    RegularizationTools = "29dad682-9a27-4bc3-9c72-016788665182"
+    Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
 git-tree-sha1 = "1d0a14036acb104d9e89698bd408f63ab58cdc82"
@@ -1352,6 +1413,18 @@ deps = ["EnumX", "ExactPredicates", "Random"]
 git-tree-sha1 = "1755070db557ec2c37df2664c75600298b0c1cfc"
 uuid = "927a84f5-c5f4-47a5-9785-b46e178433df"
 version = "1.0.3"
+
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -1475,6 +1548,11 @@ weakdeps = ["PDMats", "SparseArrays", "Statistics"]
     FillArraysSparseArraysExt = "SparseArrays"
     FillArraysStatisticsExt = "Statistics"
 
+[[deps.FindFirstFunctions]]
+git-tree-sha1 = "e90fef90f7d75e6a5b435b0fd65609759f99717a"
+uuid = "64ca27bc-2ba2-4a57-88aa-44e436879224"
+version = "1.2.0"
+
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
 git-tree-sha1 = "05882d6995ae5c12bb5f36dd2ed3f61c98cbb172"
@@ -1491,6 +1569,16 @@ version = "2.13.96+0"
 git-tree-sha1 = "9c68794ef81b08086aeb32eeaf33531668d5f5fc"
 uuid = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
 version = "1.3.7"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
+git-tree-sha1 = "cf0fe81336da9fb90944683b8c41984b08793dad"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.36"
+weakdeps = ["StaticArrays"]
+
+    [deps.ForwardDiff.extensions]
+    ForwardDiffStaticArraysExt = "StaticArrays"
 
 [[deps.FreeType]]
 deps = ["CEnum", "FreeType2_jll"]
@@ -1697,16 +1785,12 @@ deps = ["CRlibm_jll", "MacroTools", "RoundingEmulator"]
 git-tree-sha1 = "e75c4e33afbc631aa62671ebba12863321c1d46e"
 uuid = "d1acc4aa-44c8-5952-acd4-ba5d80a2a253"
 version = "0.22.12"
+weakdeps = ["DiffRules", "ForwardDiff", "RecipesBase"]
 
     [deps.IntervalArithmetic.extensions]
     IntervalArithmeticDiffRulesExt = "DiffRules"
     IntervalArithmeticForwardDiffExt = "ForwardDiff"
     IntervalArithmeticRecipesBaseExt = "RecipesBase"
-
-    [deps.IntervalArithmetic.weakdeps]
-    DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"
-    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-    RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 [[deps.IntervalSets]]
 git-tree-sha1 = "dba9ddf07f77f60450fe5d2e2beb9854d9a49bd0"
@@ -1910,15 +1994,11 @@ deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensio
 git-tree-sha1 = "8f6786d8b2b3248d79db3ad359ce95382d5a6df8"
 uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
 version = "0.12.170"
+weakdeps = ["ChainRulesCore", "ForwardDiff", "SpecialFunctions"]
 
     [deps.LoopVectorization.extensions]
     ForwardDiffExt = ["ChainRulesCore", "ForwardDiff"]
     SpecialFunctionsExt = "SpecialFunctions"
-
-    [deps.LoopVectorization.weakdeps]
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-    SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [[deps.MIMEs]]
 git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
@@ -2783,6 +2863,7 @@ version = "3.5.0+0"
 # ╠═15c78a87-7733-42f2-8169-b6059619aa6f
 # ╠═edbbab37-598c-4773-bc69-7bf64b16a54e
 # ╠═3031e818-08df-4949-a549-9cb1e0c5edf3
+# ╠═3b33d6cd-61fe-4fa3-a9fd-124db9abfded
 # ╟─58c2113f-6eb3-4ab4-a232-3c35281a0023
 # ╟─1fce1552-e97e-4eb2-89ad-5d245455b6e1
 # ╟─d6670850-8f89-46fc-8db7-2617c58d656b
@@ -2801,7 +2882,6 @@ version = "3.5.0+0"
 # ╠═735b6e9b-2c66-49b0-8bf6-a13740eab2bf
 # ╠═108e9baa-4378-449e-a6e2-e6a7495513dd
 # ╠═6ae680bf-4cdb-4d6d-986a-2923049da688
-# ╠═3b33d6cd-61fe-4fa3-a9fd-124db9abfded
 # ╠═c8dc5fc6-ec31-4aa4-9d98-92306f5fbc65
 # ╠═f5e340dc-9e73-46ea-ac16-bce72267d888
 # ╟─dae88142-7604-4f87-a95c-e5a370280c8d
@@ -2823,10 +2903,17 @@ version = "3.5.0+0"
 # ╠═1b5b2ad2-5aae-4cff-a58a-7d4a46e501cc
 # ╠═aeeec9ae-deeb-4b10-a8b5-77226fa37023
 # ╠═9ece1f94-522f-40f9-a95e-10f0ad518fb1
-# ╠═c4d6c077-08f8-4620-8e0e-eadc50582e6f
+# ╟─c4d6c077-08f8-4620-8e0e-eadc50582e6f
 # ╟─fa7d3528-460f-4129-96c2-12d08774bc59
+# ╠═6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
+# ╠═0f03911c-14e8-47f2-ab16-3601cc80125a
+# ╠═7bb08c11-910b-4f81-835a-0e2c27ff8970
+# ╠═8eab6127-5c1f-41a6-a98a-127eadd93d7d
+# ╠═ee8809b2-9e37-417f-b887-afe016fcf8c7
+# ╠═3d6311e7-7b42-4a8a-a23c-34b28b99d170
 # ╠═a802a052-e032-41f8-bbf0-40c6b365b162
 # ╠═fcfbc9bf-87d0-4928-88ae-2b98edd4385a
+# ╟─c80194a0-62d9-48af-ab4c-74c059c48b5f
 # ╠═afa766f2-eeef-4963-a1e5-93f576500d0f
 # ╠═11494618-59d6-451f-8f91-a04f4e1a24d4
 # ╟─3024a728-4e49-4e3c-a56e-e6038bbdf037
