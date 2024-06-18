@@ -53,6 +53,9 @@ using ImageCore: channelview
 # ╔═╡ e6bce302-1120-4eef-9e38-58f1411f9fc1
 using OrderedCollections: OrderedDict
 
+# ╔═╡ 61628bac-5eeb-4832-aacb-c461ad0a7dcb
+using CairoMakie: hist
+
 # ╔═╡ 544fe263-7d6d-4172-aa42-6bae0912e661
 md"""
 # Set Up
@@ -354,35 +357,17 @@ md"""
 ## Docs
 """
 
-# ╔═╡ b5826515-7854-45ac-83ea-f4adcd093cd2
+# ╔═╡ 1fce1552-e97e-4eb2-89ad-5d245455b6e1
 md"""
-!!! warning
-	These are out of date, not really sure what they correspond to but they might be useful so I am keeping them. Please refer to the README.md file to understand the data
+!!! info ""
+	See `README.md` in the root directory for more info on the scans
+
+	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
+	| ---------------- | --------- | -------------- | --------------- | --------------- |
+	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3076             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 """
-
-# ╔═╡ 4961c564-762d-4d7c-829a-95d230ec28f9
-begin
-	insert_radii = [1.2, 3.0, 5.0] ./ 2 # mm
-	insert_densities = [0.05, 0.1, 0.25, 0.4] # mg/mm^3
-	heart_rates = [0, 60, 90] # bpm
-	
-	scan_types = ["de_80kv", "de_135kv", "se_80kv", "se_120kv", "se_135kv"]
-	slice_thicknesses = [0.5, 1.0, 3.0] # mm
-	reconstruction_types = ["fbp", "aidr"]
-end;
-
-# ╔═╡ 607d024d-0c9b-44e4-a59c-88b70e03c080
-prod = product(insert_radii, insert_densities, heart_rates, scan_types, slice_thicknesses, reconstruction_types);
-
-# ╔═╡ 45ce1e42-1e58-4f2d-ba85-e27b753e8fd2
-begin
-	df = DataFrame(collect(prod))
-	rename!(df, [:insert_radii, :insert_densities, :heart_rates, :scan_types, :slice_thickness, :reconstruction_types])
-	sort!(df, [:insert_radii, :insert_densities, :heart_rates])
-end
-
-# ╔═╡ 1a175d1c-7f8d-4ddb-82da-81df92be600c
-total_accessions = nrow(df) / 30
 
 # ╔═╡ d6670850-8f89-46fc-8db7-2617c58d656b
 md"""
@@ -419,6 +404,9 @@ md"""
 Type the folder path above, where you want the DICOM files to be saved (or use a temporary directory via `mktempdir()`) in the code cell below. Then type in the instance number that you want to download and click "Submit".
 """
 
+# ╔═╡ e2843e8d-3f98-4dca-ad77-8507d6ee9220
+output_dir_temp = mktempdir()
+
 # ╔═╡ 6c8382d6-eaa5-4195-88b7-d483cc1f55bf
 function download_info(acc, ser, inst, save_folder_path)
 	
@@ -426,16 +414,16 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3051"))
+				Child(TextField(default="3074"))
 			)""",
 			md""" $(ser): $(
-				Child(TextField(default="2"))
+				Child(TextField(default="30"))
 			)""",
 			md""" $(inst): $(
 				Child(TextField(default="1"))
 			)""",
 			md""" $(save_folder_path): $(
-				Child(TextField(default="/Users/daleblack/Desktop/dcms")))
+				Child(TextField(default=output_dir_temp)))
 			)"""
 		]
 		
@@ -471,37 +459,46 @@ begin
 	end
 end
 
-# ╔═╡ 8b010494-98f6-418b-bb74-641cf69ce674
-instances_dicts
-
 # ╔═╡ 6ae680bf-4cdb-4d6d-986a-2923049da688
 instance_number = parse(Int64, instance_num)
 
-# ╔═╡ e0ccffca-4b3f-4f43-be0a-1e639e0de16d
-for i in 1:length(instances_dicts)
-	path = joinpath(output_dir, string(series_num_vec[i]))
-	if !isdir(path)
-		mkpath(path)
+# ╔═╡ 3b33d6cd-61fe-4fa3-a9fd-124db9abfded
+function process_instances(
+	instances_dicts, series_num_vec, output_dir, instance_number, ip_address
+)
+    if !isdir(output_dir)
+        mkpath(output_dir)
+    end
+
+    output_paths = String[]
+
+	for (idx, dict) in enumerate(instances_dicts)
+		_series = collect(keys(dict))[1]
+		
+	    path = joinpath(output_dir, string(series_num_vec[idx]))
+	    if !isdir(path)
+	        mkpath(path)
+	    end
+		
+	    download_instances(instances_dicts[idx], instance_number, path, ip_address)
+	
+	    output_path = joinpath(output_dir, string(_series))
+		push!(output_paths, output_path)
 	end
-	download_instances(instances_dicts[i], instance_number, path, ip_address)
+
+    return output_paths
 end
+
+# ╔═╡ c8dc5fc6-ec31-4aa4-9d98-92306f5fbc65
+output_paths = process_instances(instances_dicts, series_num_vec, output_dir, instance_number, ip_address)
+
+# ╔═╡ f5e340dc-9e73-46ea-ac16-bce72267d888
+output_path = output_paths[end]
 
 # ╔═╡ dae88142-7604-4f87-a95c-e5a370280c8d
 md"""
-# Load DICOMs
+## Load DICOMs
 """
-
-# ╔═╡ 61bfa3d0-3827-4674-a7ab-48a5e7c93df0
-# root = "/dfs7/symolloi-lab/dynamic-cac"
-
-# ╔═╡ eb4d69f7-d6e1-43e0-af3c-5e51ddfc19fe
-# readdir(root)
-
-# ╔═╡ cf0671f6-d4a0-4152-a609-4c6d112e270a
-# output_path = joinpath(root, "b", "Cardiac 0.5", "14")
-
-# ╔═╡ 799e6547-986b-4926-bbd9-9c148611b4ee
-output_path = joinpath(output_dir, readdir(output_dir)[8])
 
 # ╔═╡ 09fe5eab-c813-43f0-80f6-fda3361160e7
 dcms = dcmdir_parse(output_path)
@@ -512,14 +509,14 @@ dcm_arr = load_dcm_array(dcms);
 # ╔═╡ a37d2bd1-beb0-4e5f-bdf0-ab2df22a642c
 header = dcms[1].meta;
 
-# ╔═╡ 427d7e29-fdaf-4792-a062-344c3735ad2b
-header
-
 # ╔═╡ 03f0e7af-f702-4ab0-8a5d-fa1cd6e15aba
 exposure_tag = (0x0018, 0x1151)
 
 # ╔═╡ e2364ef8-b54b-4673-b537-1133b36b5185
-header[exposure_tag]
+mAs = header[(0x0018, 0x1151)]
+
+# ╔═╡ bc7985d4-cc47-417c-b31d-64dacb422fed
+kV = header[(0x0018, 0x0060)]
 
 # ╔═╡ 7f9f9eb3-c114-44e4-b180-3cb079ec0689
 x_space, y_space = header[(0x0028, 0x0030)]
@@ -527,14 +524,7 @@ x_space, y_space = header[(0x0028, 0x0030)]
 # ╔═╡ a2d407f4-d0b3-478d-9842-07afb8ca2f49
 slice_thickness = header[(0x0018, 0x0050)]
 
-# ╔═╡ 8b9f13af-e0e4-4541-a40e-a254591ff66d
-md"""
-!!! warning
-	The `pixel_size` should automatically be extracted from the DICOM header information using `get_pixel_size(header)` (from the src file `dicomutils.jl`). But the dicom tag associated with the pixel size is not in the header for some reason, so right now this is being hardcoded below. This should be investigated further
-"""
-
 # ╔═╡ 3aa34879-2562-4509-95f6-ef0bab905f59
-# pixel_size = [0.5, 0.5, 0.5]
 pixel_size = [x_space, y_space, slice_thickness]
 
 # ╔═╡ f6b964f5-252d-4a6e-8b68-9b11246f02f9
@@ -603,24 +593,64 @@ function centroids_from_mask(mask)
 	centroids = Int.(round.(component_centroids(label_components(new_mask))[end]))
 end
 
-# ╔═╡ 5327e410-86dd-4f35-b35f-970d99a4c469
-begin
+# ╔═╡ aeeec9ae-deeb-4b10-a8b5-77226fa37023
+function create_initial_level_set(dcm_arr)
 	half_x, half_y = size(dcm_arr, 1) ÷ 2, size(dcm_arr, 2) ÷ 2
 	init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 140)
-
+	
 	init_mask = BitArray(undef, size(dcm_arr))
 	for z in axes(dcm_arr, 3)
 		init_mask[:, :, z] = init_circle
 	end
-
 	init_mask = init_mask .* initial_level_set(size(init_mask))
-end;
+
+	return init_mask
+end
 
 # ╔═╡ 9ece1f94-522f-40f9-a95e-10f0ad518fb1
-heart_cv = chan_vese(dcm_arr; init_level_set = init_mask);
+heart_cv = chan_vese(dcm_arr; μ = 0.25, λ₁ = 1.0, λ₂ = 1.0, init_level_set = create_initial_level_set(dcm_arr), max_iter = 100, normalize = true);
+
+# ╔═╡ fa7d3528-460f-4129-96c2-12d08774bc59
+md"""
+!!! danger ""
+	- kV: 80, mAs: 15 => `threshold_low = 100`, `threshold_high = 300`
+	- kV: 80, mAs: 40 => `threshold_low = 50`, `threshold_high = 180`
+	- kV: 100, mAs: 25 => `threshold_low = 100`, `threshold_high = 200`
+	- kV: 100, mAs: 250 => `threshold_low = 50`, `threshold_high = 200`
+	- kV: 120, mAs: 150 => `threshold_low = 25`, `threshold_high = 100`
+	- kV: 120, mAs: 250 => `threshold_low = 50`, `threshold_high = 200`
+"""
+
+# ╔═╡ a802a052-e032-41f8-bbf0-40c6b365b162
+function threshold_low_high(
+	dcm_arr, heart_cv;
+	threshold_low = 50, threshold_high = 200
+)
+	
+	global thresholded_mask_low = dcm_arr .> threshold_low
+	global thresholded_mask_high = dcm_arr .< threshold_high
+	masked_thresholded = thresholded_mask_high .& thresholded_mask_low .& heart_cv
+	return masked_thresholded
+end
+
+# ╔═╡ afa766f2-eeef-4963-a1e5-93f576500d0f
+masked_thresholded = threshold_low_high(dcm_arr, heart_cv);
+
+# ╔═╡ fcfbc9bf-87d0-4928-88ae-2b98edd4385a
+heatmap(masked_thresholded[:, :, 140])
 
 # ╔═╡ 11494618-59d6-451f-8f91-a04f4e1a24d4
-centroids = centroids_from_mask(heart_cv)
+centroids = centroids_from_mask(masked_thresholded)
+
+# ╔═╡ c4d6c077-08f8-4620-8e0e-eadc50582e6f
+let
+	f = Figure()
+	ax = Axis(f[1, 1])
+	heatmap!(dcm_arr[:, :, centroids[3]], colormap = :grays)
+	heatmap!(heart_cv[:, :, centroids[3]], colormap = (:jet, 0.5))
+	scatter!(centroids[2], centroids[1])
+	f
+end
 
 # ╔═╡ 3024a728-4e49-4e3c-a56e-e6038bbdf037
 md"""
@@ -719,8 +749,18 @@ function get_insert_centers(dcm, threshold)
 	
 end
 
+# ╔═╡ 24b17874-2e77-49f9-8452-121a63f12feb
+md"""
+!!! danger ""
+	- mAs: 15, kV: 80 => `insert_threshold = 400`
+	- mAs: 150, kV: 120 => `insert_threshold = 200`
+"""
+
+# ╔═╡ c018a0fe-ac18-4491-90ab-aad4ba19af39
+insert_threshold = 400
+
 # ╔═╡ d45ddd4d-5bde-42cf-b072-d0f66078c335
-centers_a, centers_b = get_insert_centers(dcm_heart, 200);
+centers_a, centers_b = get_insert_centers(dcm_heart, insert_threshold);
 
 # ╔═╡ 9bb84424-b09a-451e-b9b0-c984fd12299a
 centers_a
@@ -801,34 +841,8 @@ function create_cylinder(array, pt1, pt2, radius, offset)
     return Bool.(cylinder)
 end
 
-# ╔═╡ d8519bec-6ae8-4575-80be-6b2bfcb3fc84
-cylinder = create_cylinder(dcm_heart, centers_a, centers_b, 8, -25);
-
-# ╔═╡ 5d301dd8-e23b-4156-8538-9c626b5a9b0b
-begin
-	_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, 12, -25);
-	background_ring = Bool.(_background_ring .- cylinder)
-end;
-
 # ╔═╡ 5c57594f-dd23-42ee-ab87-ef690767291a
 @bind z Slider(axes(dcm_heart, 3), default=div(size(dcm_heart, 3), 2), show_value=true)
-
-# ╔═╡ 309b2a1b-9760-47e3-b0be-00cf1a8716f8
-let
-	idxs = getindex.(findall(isone, cylinder[:, :, z]), [1 2])
-	idxs_ring = getindex.(findall(isone, background_ring[:, :, z]), [1 2])
-	α = 0.25
-
-	f = Figure()
-
-	ax = Axis(f[1, 1])
-	heatmap!(transpose(dcm_arr[:, :, z]); colormap = :grays)
-	scatter!(idxs[:, 2], idxs[:, 1]; markersize = 2, color = (:red, α), label = "inserts")
-	scatter!(idxs_ring[:, 2], idxs_ring[:, 1]; markersize = 3, color = (:blue, α), label = "background")
-	axislegend(ax)
-
-	f
-end
 
 # ╔═╡ 7b691778-572e-4900-b3fd-b1cb8bd61c44
 md"""
@@ -859,18 +873,6 @@ end
 # ╔═╡ 4b767984-077e-4801-bfdb-5297a4ea637d
 dcm_heart_clean = remove_outliers(dcm_heart[cylinder]);
 
-# ╔═╡ ad45ed1c-d103-449d-b8c4-49c56f465cde
-let
-	f = Figure(size = (1000, 1200))
-	ax = Axis(f[1, 1], title = "Original")
-	hist!(dcm_heart[cylinder])
-
-	ax = Axis(f[2, 1], title = "Clean")
-	hist!(dcm_heart_clean)
-
-	f
-end
-
 # ╔═╡ a3d40c53-0584-4c8b-a675-88a44f457f89
 md"""
 # Score
@@ -885,12 +887,66 @@ md"""
 scan_name = header[(0x0010, 0x0020)]
 
 # ╔═╡ bc8312ed-4958-4362-b96c-fbb60ecfd8a9
-insert_name = split(split(scan_name, "_")[2], "-")[1]
+insert_name = split(scan_name, "_")[1]
+
+# ╔═╡ 835c6d36-708b-4f32-91df-33ec0abcb993
+bpm = split(scan_name, "_")[2]
+
+# ╔═╡ e71b73be-4ac0-4aff-a13b-516f812c606f
+if insert_name == "A" || insert_name == "B" || insert_name == "C"
+	gt_density = 0.050  # mg/mm^3
+elseif insert_name == "D" || insert_name == "E" || insert_name == "F"
+	gt_density = 0.100  # mg/mm^3
+end
 
 # ╔═╡ 0028adf1-cc3d-411a-875a-c7ebbb342500
-if insert_name == "F"
-	gt_density = 0.100  # mg/mm^3
-	diameter = 5 # mm
+## Extract diameter
+if insert_name == "A" || insert_name == "D"
+	diameter = 1.2 # mm
+elseif insert_name == "B" || insert_name == "E"
+	diameter = 3.0 # mm
+elseif insert_name == "C" || insert_name == "F"
+	diameter = 5.0 # mm
+end
+
+# ╔═╡ 94ab2a1d-6816-4684-a2ff-c763c6c3592b
+cylinder_rad = diameter * 2
+
+# ╔═╡ d8519bec-6ae8-4575-80be-6b2bfcb3fc84
+cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25);
+
+# ╔═╡ ad45ed1c-d103-449d-b8c4-49c56f465cde
+let
+	f = Figure(size = (1000, 1200))
+	ax = Axis(f[1, 1], title = "Original")
+	hist!(dcm_heart[cylinder])
+
+	ax = Axis(f[2, 1], title = "Clean")
+	hist!(dcm_heart_clean)
+
+	f
+end
+
+# ╔═╡ 5d301dd8-e23b-4156-8538-9c626b5a9b0b
+begin
+	_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad + 6, -25);
+	background_ring = Bool.(_background_ring .- cylinder)
+end;
+
+# ╔═╡ 309b2a1b-9760-47e3-b0be-00cf1a8716f8
+let
+	idxs = getindex.(findall(isone, cylinder[:, :, z]), [1 2])
+	idxs_ring = getindex.(findall(isone, background_ring[:, :, z]), [1 2])
+	α = 0.25
+
+	f = Figure()
+
+	ax = Axis(f[1, 1])
+	heatmap!(dcm_arr[:, :, z]; colormap = :grays)
+	heatmap!(cylinder[:, :, z]; colormap = (:viridis, 0.2))
+	heatmap!(background_ring[:, :, z]; colormap = (:jet, 0.2))
+
+	f
 end
 
 # ╔═╡ 6a9ab52a-2586-4d48-b035-7c7ec9ff7220
@@ -933,12 +989,6 @@ vf_mass = score(dcm_heart_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size
 md"""
 ## Agatston
 """
-
-# ╔═╡ 49afe54d-b64f-46bd-9aba-60d32de4b197
-kV = header[(0x0018, 0x0060)]
-
-# ╔═╡ 33fa3218-6b70-4c3c-bfb8-27f47c8c7f71
-mAs = header[(0x0018, 0x1151)]
 
 # ╔═╡ 906e5abb-4bdf-4fd8-916e-c97644b97fa6
 mass_cal_factor = ρ_calcium_400 / hu_calcium_400
@@ -2734,11 +2784,7 @@ version = "3.5.0+0"
 # ╠═edbbab37-598c-4773-bc69-7bf64b16a54e
 # ╠═3031e818-08df-4949-a549-9cb1e0c5edf3
 # ╟─58c2113f-6eb3-4ab4-a232-3c35281a0023
-# ╟─b5826515-7854-45ac-83ea-f4adcd093cd2
-# ╠═4961c564-762d-4d7c-829a-95d230ec28f9
-# ╠═607d024d-0c9b-44e4-a59c-88b70e03c080
-# ╠═45ce1e42-1e58-4f2d-ba85-e27b753e8fd2
-# ╠═1a175d1c-7f8d-4ddb-82da-81df92be600c
+# ╟─1fce1552-e97e-4eb2-89ad-5d245455b6e1
 # ╟─d6670850-8f89-46fc-8db7-2617c58d656b
 # ╟─61519241-6d6a-48f7-aa4f-4e0d31a73811
 # ╟─c9b522be-cf22-4265-9021-f0f1a40887f7
@@ -2746,6 +2792,7 @@ version = "3.5.0+0"
 # ╟─18df37d3-72f6-4152-a072-d99b14e2c67f
 # ╟─9941ed19-2981-4582-b7f8-1a772be24292
 # ╟─a853ad82-5c11-4cff-abc7-e29171212b45
+# ╠═e2843e8d-3f98-4dca-ad77-8507d6ee9220
 # ╟─6c8382d6-eaa5-4195-88b7-d483cc1f55bf
 # ╟─bccbed8d-439f-44cb-b1f4-1fd43b29faad
 # ╠═afff46e4-e2e5-4f2e-b3df-83ea5ae24c76
@@ -2753,23 +2800,19 @@ version = "3.5.0+0"
 # ╠═a86fb16e-0323-4ab2-84dd-8120bdef9037
 # ╠═735b6e9b-2c66-49b0-8bf6-a13740eab2bf
 # ╠═108e9baa-4378-449e-a6e2-e6a7495513dd
-# ╠═8b010494-98f6-418b-bb74-641cf69ce674
 # ╠═6ae680bf-4cdb-4d6d-986a-2923049da688
-# ╠═e0ccffca-4b3f-4f43-be0a-1e639e0de16d
+# ╠═3b33d6cd-61fe-4fa3-a9fd-124db9abfded
+# ╠═c8dc5fc6-ec31-4aa4-9d98-92306f5fbc65
+# ╠═f5e340dc-9e73-46ea-ac16-bce72267d888
 # ╟─dae88142-7604-4f87-a95c-e5a370280c8d
-# ╠═61bfa3d0-3827-4674-a7ab-48a5e7c93df0
-# ╠═eb4d69f7-d6e1-43e0-af3c-5e51ddfc19fe
-# ╠═cf0671f6-d4a0-4152-a609-4c6d112e270a
-# ╠═799e6547-986b-4926-bbd9-9c148611b4ee
 # ╠═09fe5eab-c813-43f0-80f6-fda3361160e7
 # ╠═346a3316-067b-4f15-93a3-bba0be9458cc
 # ╠═a37d2bd1-beb0-4e5f-bdf0-ab2df22a642c
-# ╠═427d7e29-fdaf-4792-a062-344c3735ad2b
 # ╠═03f0e7af-f702-4ab0-8a5d-fa1cd6e15aba
 # ╠═e2364ef8-b54b-4673-b537-1133b36b5185
+# ╠═bc7985d4-cc47-417c-b31d-64dacb422fed
 # ╠═7f9f9eb3-c114-44e4-b180-3cb079ec0689
 # ╠═a2d407f4-d0b3-478d-9842-07afb8ca2f49
-# ╟─8b9f13af-e0e4-4541-a40e-a254591ff66d
 # ╠═3aa34879-2562-4509-95f6-ef0bab905f59
 # ╟─f6b964f5-252d-4a6e-8b68-9b11246f02f9
 # ╟─e38e12db-11e3-4ac8-99b5-9a1c77fa53c5
@@ -2778,8 +2821,13 @@ version = "3.5.0+0"
 # ╠═bb9caf89-984d-4cac-bd35-8324568169c5
 # ╠═38ec696f-7dad-47dd-b1ef-880f5424922e
 # ╠═1b5b2ad2-5aae-4cff-a58a-7d4a46e501cc
-# ╠═5327e410-86dd-4f35-b35f-970d99a4c469
+# ╠═aeeec9ae-deeb-4b10-a8b5-77226fa37023
 # ╠═9ece1f94-522f-40f9-a95e-10f0ad518fb1
+# ╠═c4d6c077-08f8-4620-8e0e-eadc50582e6f
+# ╟─fa7d3528-460f-4129-96c2-12d08774bc59
+# ╠═a802a052-e032-41f8-bbf0-40c6b365b162
+# ╠═fcfbc9bf-87d0-4928-88ae-2b98edd4385a
+# ╠═afa766f2-eeef-4963-a1e5-93f576500d0f
 # ╠═11494618-59d6-451f-8f91-a04f4e1a24d4
 # ╟─3024a728-4e49-4e3c-a56e-e6038bbdf037
 # ╠═f9f82807-042f-4d6e-a4c0-e7288e17afb7
@@ -2790,9 +2838,12 @@ version = "3.5.0+0"
 # ╟─e02ae993-1a0b-4fef-8a26-65a459876081
 # ╠═fba381e3-796b-4150-b383-fb0bad70afbc
 # ╟─4e13c7d0-b613-40aa-b005-321a80c5437e
-# ╟─4270ddfa-43ac-49da-98c4-3066033432cf
+# ╠═4270ddfa-43ac-49da-98c4-3066033432cf
+# ╠═61628bac-5eeb-4832-aacb-c461ad0a7dcb
 # ╟─c1b73667-d9f0-4b13-afab-e68197fbf8c5
 # ╠═5428ab86-0d66-4872-8b73-507cd978a57c
+# ╟─24b17874-2e77-49f9-8452-121a63f12feb
+# ╠═c018a0fe-ac18-4491-90ab-aad4ba19af39
 # ╠═d45ddd4d-5bde-42cf-b072-d0f66078c335
 # ╠═9bb84424-b09a-451e-b9b0-c984fd12299a
 # ╠═54f3dfdc-2132-40da-9203-bb34ff88b009
@@ -2800,6 +2851,7 @@ version = "3.5.0+0"
 # ╟─b955f64b-dcc4-4ad2-90dd-f1b9bc51f889
 # ╠═45cfb064-dfae-4d8b-a367-e6da668d2e8f
 # ╠═34116faa-f7cb-4ea5-b899-3c7ed69cf541
+# ╠═94ab2a1d-6816-4684-a2ff-c763c6c3592b
 # ╠═d8519bec-6ae8-4575-80be-6b2bfcb3fc84
 # ╠═5d301dd8-e23b-4156-8538-9c626b5a9b0b
 # ╟─5c57594f-dd23-42ee-ab87-ef690767291a
@@ -2814,6 +2866,8 @@ version = "3.5.0+0"
 # ╟─e61a9acc-1a1d-41ec-967f-8633eca40021
 # ╠═4f44c2ba-8f80-46d9-b679-6a45212140a2
 # ╠═bc8312ed-4958-4362-b96c-fbb60ecfd8a9
+# ╠═835c6d36-708b-4f32-91df-33ec0abcb993
+# ╠═e71b73be-4ac0-4aff-a13b-516f812c606f
 # ╠═0028adf1-cc3d-411a-875a-c7ebbb342500
 # ╠═6a9ab52a-2586-4d48-b035-7c7ec9ff7220
 # ╠═f231a0cc-1f9d-4bb0-b016-fe8e29357099
@@ -2827,8 +2881,6 @@ version = "3.5.0+0"
 # ╠═79bc8e94-1568-49c2-a9c8-55b52427cbd1
 # ╠═3163ccbd-e53f-42a9-9fa3-7fb5430104b7
 # ╟─f361009d-ce57-43dd-bde3-b27f20cd38df
-# ╠═49afe54d-b64f-46bd-9aba-60d32de4b197
-# ╠═33fa3218-6b70-4c3c-bfb8-27f47c8c7f71
 # ╠═906e5abb-4bdf-4fd8-916e-c97644b97fa6
 # ╠═66fbeffb-9012-43c2-b5b5-e96e0fd75e7e
 # ╟─00000000-0000-0000-0000-000000000001

@@ -29,6 +29,10 @@ Study measuring dose reduction capabiltiies of the new calcium scoring technique
   - High: 90 bpm
 - This information is included in the DICOM scan name (e.g. "F_0bpm", "D_60bpm", etc.) as it cannot be determined by the DICOM header
 
+**kV & mAs**
+- Various tube voltages (80, 100, 120 kV) were studied
+- Various tube current exposure times (10, 15, 20, 25, 30, 40, 50, 100, 150, 250 mAs) were studied
+
 ## Repository Structure
 - `measure_cac.jl`: notebook with rich visualizations for quality control cac measurements of one singular scan
 - `measure_cac_script.jl`: notebook wtihout visualizations for complete cac measurements for one set of scans (various mAs)

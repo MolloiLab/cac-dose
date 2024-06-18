@@ -513,35 +513,17 @@ md"""
 ## Docs
 """
 
-# ╔═╡ e2a1bef9-e204-4c8c-8560-e3918a15ca89
+# ╔═╡ eee22aed-7c7c-4421-98e6-8f04d0734165
 md"""
-!!! warning
-	These are out of date, not really sure what they correspond to but they might be useful so I am keeping them. Please refer to the README.md file to understand the data
+!!! info ""
+	See `README.md` in the root directory for more info on the scans
+
+	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
+	| ---------------- | --------- | -------------- | --------------- | --------------- |
+	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3076             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 """
-
-# ╔═╡ 147c8342-3e56-4dfa-8acf-0bc1dbfe20dd
-begin
-	insert_radii = [1.2, 3.0, 5.0] ./ 2 # mm
-	insert_densities = [0.05, 0.1, 0.25, 0.4] # mg/mm^3
-	heart_rates = [0, 60, 90] # bpm
-	
-	scan_types = ["de_80kv", "de_135kv", "se_80kv", "se_120kv", "se_135kv"]
-	slice_thicknesses = [0.5, 1.0, 3.0] # mm
-	reconstruction_types = ["fbp", "aidr"]
-end;
-
-# ╔═╡ d48442c6-38e2-4795-a5f3-8e94e251f1bf
-prod = product(insert_radii, insert_densities, heart_rates, scan_types, slice_thicknesses, reconstruction_types);
-
-# ╔═╡ de4b4d8c-1c0b-4af2-8eea-153b9010c07d
-begin
-	df = DataFrame(collect(prod))
-	rename!(df, [:insert_radii, :insert_densities, :heart_rates, :scan_types, :slice_thickness, :reconstruction_types])
-	sort!(df, [:insert_radii, :insert_densities, :heart_rates])
-end
-
-# ╔═╡ b7be68ab-ec4f-42b9-956c-64908d9e50e6
-total_accessions = nrow(df) / 30
 
 # ╔═╡ 4f0f5767-5c26-4ae4-a28c-20ca9ed986ee
 md"""
@@ -588,10 +570,10 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3051"))
+				Child(TextField(default="3074"))
 			)""",
 			md""" $(ser): $(
-				Child(TextField(default="2, 3, 4, 5, 6, 7, 8, 9"))
+				Child(TextField(default="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31"))
 			)""",
 			md""" $(inst): $(
 				Child(TextField(default="1"))
@@ -636,20 +618,6 @@ instances_dicts
 # ╔═╡ 986a7b15-a441-412f-88a7-25f9648cfcbc
 instance_number = parse(Int64, instance_num)
 
-# ╔═╡ 39471e4c-b923-4f08-8d71-c9c79f19c866
-md"""
-## Load DICOMs
-"""
-
-# ╔═╡ 876f4307-63fa-4b2a-8ca2-c338a95403db
-for i in 1:length(instances_dicts)
-	path = joinpath(output_dir, string(series_num_vec[i]))
-	if !isdir(path)
-		mkpath(path)
-	end
-	download_instances(instances_dicts[i], instance_number, path, ip_address)
-end
-
 # ╔═╡ 8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
 md"""
 # Run Script
@@ -660,6 +628,7 @@ begin
     results_df = DataFrame(
         insert_name = String[],
         beats_per_minute = String[],
+		kV = Float64[],
         mAs = Float64[],
         gt_mass = Float64[],
         vf_mass = Float64[],
@@ -668,9 +637,18 @@ begin
 
 	local insert_name
 	local beats_per_minute
-    for i in 1:length(series_num_vec)
+    # for i in 1:length(series_num_vec)
+    for i in 1:5
 		@info i
+
+		path = joinpath(output_dir, string(series_num_vec[i]))
+		if !isdir(path)
+			mkpath(path)
+		end
+		download_instances(instances_dicts[i], instance_number, path, ip_address)
+		
 		output_path = joinpath(output_dir, readdir(output_dir)[i])
+		@info output_path
 	
 		# Load DICOMs
 		dcms = dcmdir_parse(output_path)
@@ -678,9 +656,10 @@ begin
 	
 		header = dcms[1].meta
 		scan_name = header[(0x0010, 0x0020)]
-		insert_name = split(split(scan_name, "_")[2], "-")[1]
-		# beats_per_minute = split(scan_name, "_")[3]
-		beats_per_minute = "0bpm"
+		insert_name = split(scan_name, "_")[1]
+		@info insert_name
+		beats_per_minute = split(scan_name, "_")[2]
+		@info beats_per_minute
 		
 		mAs = header[(0x0018, 0x1151)]
 		kV = header[(0x0018, 0x0060)]
@@ -690,7 +669,7 @@ begin
 	
 		# Mask Heart
 		half_x, half_y = size(dcm_arr, 1) ÷ 2, size(dcm_arr, 2) ÷ 2
-		init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 140)
+		init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 100)
 		
 		init_mask = BitArray(undef, size(dcm_arr))
 		for z in axes(dcm_arr, 3)
@@ -698,25 +677,11 @@ begin
 		end
 		
 		init_mask = init_mask .* initial_level_set(size(init_mask))
-		heart_cv = chan_vese(dcm_arr; init_level_set = init_mask)
+		heart_cv = chan_vese(dcm_arr; μ = 0.25, λ₁ = 1e3, λ₂ = 1.0, init_level_set = init_mask)
 		centroids = centroids_from_mask(heart_cv)
-		heart_rad = 100
+		heart_rad = 90
 		heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad)
 	
-		# Inserts
-		dcm_heart = dcm_arr .* heart_mask
-		centers_a, centers_b = get_insert_centers(dcm_heart, 200)
-		cylinder = create_cylinder(dcm_heart, centers_a, centers_b, 8, -25)
-		
-		_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, 12, -25)
-		background_ring = Bool.(_background_ring .- cylinder)
-	
-		binary_calibration = falses(size(dcm_heart))
-		binary_calibration[centers_a...] = true
-		binary_calibration = dilate(binary_calibration)
-		dcm_heart_clean = remove_outliers(dcm_heart[cylinder])
-	
-		# Ground truth mass
 		## Extract density
 		if insert_name == "A" || insert_name == "B" || insert_name == "C"
 			gt_density = 0.050  # mg/mm^3
@@ -732,7 +697,22 @@ begin
 		elseif insert_name == "C" || insert_name == "F"
 			diameter = 5.0 # mm
 		end
+
+		# Inserts
+		dcm_heart = dcm_arr .* heart_mask
+		centers_a, centers_b = get_insert_centers(dcm_heart, 200)
+		cylinder_rad = diameter * 2
+		cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25)
+		background_rad = cylinder_rad + 6
+		_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, background_rad, -25)
+		background_ring = Bool.(_background_ring .- cylinder)
+	
+		binary_calibration = falses(size(dcm_heart))
+		binary_calibration[centers_a...] = true
+		binary_calibration = dilate(binary_calibration)
+		dcm_heart_clean = remove_outliers(dcm_heart[cylinder])
 		
+		# Ground truth mass
 		num_inserts = 3
 		gt_length = 7 # mm
 		gt_volume = π * (diameter/2)^2 * gt_length * num_inserts # mm^3
@@ -751,9 +731,11 @@ begin
 		# Agatston
 		mass_cal_factor = ρ_calcium_400 / hu_calcium_400
 		agatston_agatston, agatston_volume, agatston_mass = score(dcm_heart_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+
+		@info vf_mass, agatston_mass
 	
 		# Push results to DataFrame
-		push!(results_df, [insert_name, beats_per_minute, mAs, gt_mass, vf_mass, agatston_mass])
+		push!(results_df, [insert_name, beats_per_minute, kV, mAs, gt_mass, vf_mass, agatston_mass])
     end
 
 	output_filename = joinpath(pwd(),"data","$(insert_name)_$(beats_per_minute).csv")
@@ -2601,11 +2583,7 @@ version = "3.5.0+0"
 # ╠═0b72af17-61fc-4b86-a338-8f86d32058fe
 # ╠═d61f577c-531a-4f16-a806-5bcfc64a94c2
 # ╟─da4739f0-4857-4b12-a5a9-bab91c543694
-# ╟─e2a1bef9-e204-4c8c-8560-e3918a15ca89
-# ╠═147c8342-3e56-4dfa-8acf-0bc1dbfe20dd
-# ╠═d48442c6-38e2-4795-a5f3-8e94e251f1bf
-# ╠═de4b4d8c-1c0b-4af2-8eea-153b9010c07d
-# ╠═b7be68ab-ec4f-42b9-956c-64908d9e50e6
+# ╟─eee22aed-7c7c-4421-98e6-8f04d0734165
 # ╟─4f0f5767-5c26-4ae4-a28c-20ca9ed986ee
 # ╟─96c15de9-3100-4d4d-b2e0-1380cf0ec31f
 # ╟─1c611a7b-a89c-4bd3-99cc-296a4ccf43a5
@@ -2622,8 +2600,6 @@ version = "3.5.0+0"
 # ╠═061edd0d-31a1-4f9a-842e-9b3c113d6e4b
 # ╠═1cbc8875-8b23-4660-8eb6-543f31436c73
 # ╠═986a7b15-a441-412f-88a7-25f9648cfcbc
-# ╟─39471e4c-b923-4f08-8d71-c9c79f19c866
-# ╠═876f4307-63fa-4b2a-8ca2-c338a95403db
 # ╟─8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
 # ╠═19b23f93-48b3-4c39-bcee-32b03d4f6f50
 # ╠═4951072e-5546-4825-a12c-bb917df5995c
