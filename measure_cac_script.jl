@@ -54,7 +54,7 @@ using CalciumScoring: score, VolumeFraction, Agatston
 using ImageCore: channelview
 
 # ╔═╡ 29fd1197-53c7-4660-849e-f1e684acd8d1
-using DataInterpolations: LinearInterpolation
+using DataInterpolations: QuadraticInterpolation
 
 # ╔═╡ 10872202-4a25-4a8b-ab1d-35c4ece5a2a2
 using OrderedCollections: OrderedDict
@@ -250,21 +250,21 @@ end
 # ╔═╡ aae0aaec-8268-4765-a451-0bceb31dd6e2
 function calculate_thresholds(
 	kV, mAs;
-	mAs_arr = [10, 40, 250]
+	mAs_arr = [10, 20, 40, 100, 150, 250]
 )
 	if kV == 80
-		threshold_low_arr = [100, 50, 0]
-		threshold_high_arr = [300, 180, 40]
+		threshold_low_arr = [100, 80, 50, 20, 10, 0]
+		threshold_high_arr = [300, 255, 180, 90, 65, 40]
     elseif kV == 100
-		threshold_low_arr = [70, 35, 20]
-		threshold_high_arr = [230, 90, 80]
+		threshold_low_arr = [70, 55, 35, 31, 24, 20]
+		threshold_high_arr = [230, 150, 90, 83, 83, 80]
     elseif kV == 120
-		threshold_low_arr = [40, 38, 22]
-		threshold_high_arr = [150, 95, 85]
+		threshold_low_arr = [40, 39, 38, 27, 23, 22]
+		threshold_high_arr = [150, 105, 95, 90, 88, 85]
     end
 
-	threshold_low_interp = LinearInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
-	threshold_high_interp = LinearInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
+	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
 
 	threshold_low = threshold_low_interp(mAs)
 	threshold_high = threshold_high_interp(mAs)
@@ -647,7 +647,7 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3074"))
+				Child(TextField(default="3075"))
 			)""",
 			md""" $(ser): $(
 				Child(TextField(default="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31"))
@@ -767,7 +767,7 @@ begin
 		dcm_heart = dcm_arr .* heart_mask
 		insert_threshold = 500
 		centers_a, centers_b = get_insert_centers(dcm_heart, insert_threshold)
-		cylinder_rad = diameter * 2
+		cylinder_rad = diameter + 1.2
 		cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25)
 		background_rad = cylinder_rad + 6
 		_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, background_rad, -25)
