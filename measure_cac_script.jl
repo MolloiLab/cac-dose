@@ -53,6 +53,9 @@ using CalciumScoring: score, VolumeFraction, Agatston
 # ╔═╡ 41d34cdb-af4c-4c59-9ae8-e020b72b6964
 using ImageCore: channelview
 
+# ╔═╡ 29fd1197-53c7-4660-849e-f1e684acd8d1
+using DataInterpolations: LinearInterpolation
+
 # ╔═╡ 10872202-4a25-4a8b-ab1d-35c4ece5a2a2
 using OrderedCollections: OrderedDict
 
@@ -242,6 +245,40 @@ function create_mask(array, mask)
         overlayed_mask[idx] = array[idx]
     end
     return overlayed_mask
+end
+
+# ╔═╡ aae0aaec-8268-4765-a451-0bceb31dd6e2
+function calculate_thresholds(
+	kV, mAs;
+	mAs_arr = [10, 40, 250]
+)
+	if kV == 80
+		threshold_low_arr = [100, 50, 0]
+		threshold_high_arr = [300, 180, 40]
+    elseif kV == 100
+		threshold_low_arr = [70, 35, 20]
+		threshold_high_arr = [230, 90, 80]
+    elseif kV == 120
+		threshold_low_arr = [40, 38, 22]
+		threshold_high_arr = [150, 95, 85]
+    end
+
+	threshold_low_interp = LinearInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
+	threshold_high_interp = LinearInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+
+	threshold_low = threshold_low_interp(mAs)
+	threshold_high = threshold_high_interp(mAs)
+    return threshold_low, threshold_high
+end
+
+# ╔═╡ 172d043b-c600-43e6-a75d-524bc9dd4955
+function threshold_low_high(dcm_arr, kV, mAs)
+    threshold_low, threshold_high = calculate_thresholds(kV, mAs)
+	thresholded_mask_low = dcm_arr .> threshold_low
+    thresholded_mask_high = dcm_arr .< threshold_high
+    masked_thresholded = thresholded_mask_high .& thresholded_mask_low
+
+    return masked_thresholded
 end
 
 # ╔═╡ 18e0ba73-e0f5-42b5-a915-d9287bd9a006
@@ -563,7 +600,6 @@ md"""
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
-	| 3076             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ 4f0f5767-5c26-4ae4-a28c-20ca9ed986ee
@@ -659,6 +695,9 @@ instances_dicts
 # ╔═╡ 986a7b15-a441-412f-88a7-25f9648cfcbc
 instance_number = parse(Int64, instance_num)
 
+# ╔═╡ d60685cd-846f-4591-9908-2f2275a193d0
+instances_dicts
+
 # ╔═╡ 8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
 md"""
 # Run Script
@@ -678,17 +717,13 @@ begin
 
 	local insert_name
 	local beats_per_minute
-    # for i in 1:length(series_num_vec)
-    for i in 1:5
+    for (i, dicts) in enumerate(instances_dicts)
 		@info i
+		@info dicts
 
-		path = joinpath(output_dir, string(series_num_vec[i]))
-		if !isdir(path)
-			mkpath(path)
-		end
-		download_instances(instances_dicts[i], instance_number, path, ip_address)
+		output_paths = process_instances([dicts], series_num_vec[i], output_dir, instance_number, ip_address)
 		
-		output_path = joinpath(output_dir, readdir(output_dir)[i])
+		output_path = output_paths[end]
 		@info output_path
 	
 		# Load DICOMs
@@ -698,9 +733,7 @@ begin
 		header = dcms[1].meta
 		scan_name = header[(0x0010, 0x0020)]
 		insert_name = split(scan_name, "_")[1]
-		@info insert_name
 		beats_per_minute = split(scan_name, "_")[2]
-		@info beats_per_minute
 		
 		mAs = header[(0x0018, 0x1151)]
 		kV = header[(0x0018, 0x0060)]
@@ -709,18 +742,9 @@ begin
 		pixel_size = [x_space, y_space, slice_thickness]
 	
 		# Mask Heart
-		half_x, half_y = size(dcm_arr, 1) ÷ 2, size(dcm_arr, 2) ÷ 2
-		init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 100)
-		
-		init_mask = BitArray(undef, size(dcm_arr))
-		for z in axes(dcm_arr, 3)
-			init_mask[:, :, z] = init_circle
-		end
-		
-		init_mask = init_mask .* initial_level_set(size(init_mask))
-		heart_cv = chan_vese(dcm_arr; μ = 0.25, λ₁ = 1e3, λ₂ = 1.0, init_level_set = init_mask)
-		centroids = centroids_from_mask(heart_cv)
-		heart_rad = 90
+		mask_thresholded = threshold_low_high(dcm_arr, kV, mAs)
+		centroids = centroids_from_mask(mask_thresholded)
+		heart_rad = 100
 		heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad)
 	
 		## Extract density
@@ -741,7 +765,8 @@ begin
 
 		# Inserts
 		dcm_heart = dcm_arr .* heart_mask
-		centers_a, centers_b = get_insert_centers(dcm_heart, 200)
+		insert_threshold = 500
+		centers_a, centers_b = get_insert_centers(dcm_heart, insert_threshold)
 		cylinder_rad = diameter * 2
 		cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25)
 		background_rad = cylinder_rad + 6
@@ -797,6 +822,7 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 CalciumScoring = "9c0cb1da-21b1-4615-967b-153e03110a28"
 DICOM = "a26e6606-dd52-5f6a-a97f-4f611373d757"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 ImageCore = "a09fc81d-aa75-5fe9-8630-4744c3626534"
 ImageMorphology = "787d08f9-d448-5407-9aad-5290dd7ab264"
@@ -815,6 +841,7 @@ CairoMakie = "~0.12.2"
 CalciumScoring = "~0.4.0"
 DICOM = "~0.11.0"
 DataFrames = "~1.6.1"
+DataInterpolations = "~5.2.0"
 HTTP = "~1.10.8"
 ImageCore = "~0.10.2"
 ImageMorphology = "~0.4.5"
@@ -832,7 +859,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "8871edfc7be21ef62bc97ae841d6d9fcac7a16c7"
+project_hash = "efb9f0687ed4a560919717b6c1ac6293153a8010"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1063,6 +1090,12 @@ git-tree-sha1 = "362a287c3aa50601b0bc359053d5c2468f0e7ce0"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.11"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
 git-tree-sha1 = "b1c55339b7c6c350ee89f2c1604299660525b248"
@@ -1133,6 +1166,24 @@ git-tree-sha1 = "04c738083f29f86e62c8afc341f0967d8717bdb8"
 uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 version = "1.6.1"
 
+[[deps.DataInterpolations]]
+deps = ["FindFirstFunctions", "ForwardDiff", "LinearAlgebra", "PrettyTables", "RecipesBase", "Reexport"]
+git-tree-sha1 = "a47492f3694b8cd647a9a172a5111f585868f2c6"
+uuid = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
+version = "5.2.0"
+
+    [deps.DataInterpolations.extensions]
+    DataInterpolationsChainRulesCoreExt = "ChainRulesCore"
+    DataInterpolationsOptimExt = "Optim"
+    DataInterpolationsRegularizationToolsExt = "RegularizationTools"
+    DataInterpolationsSymbolicsExt = "Symbolics"
+
+    [deps.DataInterpolations.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+    RegularizationTools = "29dad682-9a27-4bc3-9c72-016788665182"
+    Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
 git-tree-sha1 = "1d0a14036acb104d9e89698bd408f63ab58cdc82"
@@ -1153,6 +1204,18 @@ deps = ["EnumX", "ExactPredicates", "Random"]
 git-tree-sha1 = "1755070db557ec2c37df2664c75600298b0c1cfc"
 uuid = "927a84f5-c5f4-47a5-9785-b46e178433df"
 version = "1.0.3"
+
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -1276,6 +1339,11 @@ weakdeps = ["PDMats", "SparseArrays", "Statistics"]
     FillArraysSparseArraysExt = "SparseArrays"
     FillArraysStatisticsExt = "Statistics"
 
+[[deps.FindFirstFunctions]]
+git-tree-sha1 = "e90fef90f7d75e6a5b435b0fd65609759f99717a"
+uuid = "64ca27bc-2ba2-4a57-88aa-44e436879224"
+version = "1.2.0"
+
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
 git-tree-sha1 = "05882d6995ae5c12bb5f36dd2ed3f61c98cbb172"
@@ -1292,6 +1360,16 @@ version = "2.13.96+0"
 git-tree-sha1 = "9c68794ef81b08086aeb32eeaf33531668d5f5fc"
 uuid = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
 version = "1.3.7"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
+git-tree-sha1 = "cf0fe81336da9fb90944683b8c41984b08793dad"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.36"
+weakdeps = ["StaticArrays"]
+
+    [deps.ForwardDiff.extensions]
+    ForwardDiffStaticArraysExt = "StaticArrays"
 
 [[deps.FreeType]]
 deps = ["CEnum", "FreeType2_jll"]
@@ -1498,16 +1576,12 @@ deps = ["CRlibm_jll", "MacroTools", "RoundingEmulator"]
 git-tree-sha1 = "90709228dc114e599a2b62b7d23482a4f50938ee"
 uuid = "d1acc4aa-44c8-5952-acd4-ba5d80a2a253"
 version = "0.22.13"
+weakdeps = ["DiffRules", "ForwardDiff", "RecipesBase"]
 
     [deps.IntervalArithmetic.extensions]
     IntervalArithmeticDiffRulesExt = "DiffRules"
     IntervalArithmeticForwardDiffExt = "ForwardDiff"
     IntervalArithmeticRecipesBaseExt = "RecipesBase"
-
-    [deps.IntervalArithmetic.weakdeps]
-    DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"
-    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-    RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 [[deps.IntervalSets]]
 git-tree-sha1 = "dba9ddf07f77f60450fe5d2e2beb9854d9a49bd0"
@@ -1711,15 +1785,11 @@ deps = ["ArrayInterface", "CPUSummary", "CloseOpenIntervals", "DocStringExtensio
 git-tree-sha1 = "8f6786d8b2b3248d79db3ad359ce95382d5a6df8"
 uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
 version = "0.12.170"
+weakdeps = ["ChainRulesCore", "ForwardDiff", "SpecialFunctions"]
 
     [deps.LoopVectorization.extensions]
     ForwardDiffExt = ["ChainRulesCore", "ForwardDiff"]
     SpecialFunctionsExt = "SpecialFunctions"
-
-    [deps.LoopVectorization.weakdeps]
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-    SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [[deps.MIMEs]]
 git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
@@ -2606,6 +2676,9 @@ version = "3.5.0+0"
 # ╠═b7d72bb0-4ed8-4d78-bf47-4f333a2daee7
 # ╟─26ff0532-dbf6-485d-a83f-199d0f70b0e6
 # ╠═0a61db85-1f29-4b90-a4da-651f15b0f38b
+# ╠═29fd1197-53c7-4660-849e-f1e684acd8d1
+# ╠═aae0aaec-8268-4765-a451-0bceb31dd6e2
+# ╠═172d043b-c600-43e6-a75d-524bc9dd4955
 # ╟─18e0ba73-e0f5-42b5-a915-d9287bd9a006
 # ╠═10872202-4a25-4a8b-ab1d-35c4ece5a2a2
 # ╠═bf3d544f-9ab8-430a-b7cb-5da5c7381d52
@@ -2643,6 +2716,7 @@ version = "3.5.0+0"
 # ╠═061edd0d-31a1-4f9a-842e-9b3c113d6e4b
 # ╠═1cbc8875-8b23-4660-8eb6-543f31436c73
 # ╠═986a7b15-a441-412f-88a7-25f9648cfcbc
+# ╠═d60685cd-846f-4591-9908-2f2275a193d0
 # ╟─8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
 # ╠═19b23f93-48b3-4c39-bcee-32b03d4f6f50
 # ╠═4951072e-5546-4825-a12c-bb917df5995c

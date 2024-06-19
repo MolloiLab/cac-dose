@@ -53,11 +53,11 @@ using ImageCore: channelview
 # ╔═╡ e6bce302-1120-4eef-9e38-58f1411f9fc1
 using OrderedCollections: OrderedDict
 
-# ╔═╡ 6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
-using DataInterpolations
+# ╔═╡ b777df44-527f-4796-988b-2a4c99e3de6f
+using CairoMakie: lines!
 
-# ╔═╡ 61628bac-5eeb-4832-aacb-c461ad0a7dcb
-using CairoMakie: hist
+# ╔═╡ 6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
+using DataInterpolations: QuadraticInterpolation
 
 # ╔═╡ 544fe263-7d6d-4172-aa42-6bae0912e661
 md"""
@@ -104,131 +104,6 @@ function get_pixel_size(header)
             push!(pixel_size, head[(0x0018, 0x0050)])
 		end
 	return pixel_size
-end
-
-# ╔═╡ 5558b6d9-313d-4d0e-aa6f-2bfb55b0ddcb
-md"""
-#### Active Contours
-"""
-
-# ╔═╡ 3e02bf6d-d38f-4f03-8c05-051a4e109944
-function initial_level_set(shape::Tuple{Int64, Int64})
-    x₀ = reshape(collect(0:shape[begin]-1), shape[begin], 1)
-    y₀ = reshape(collect(0:shape[begin+1]-1), 1, shape[begin+1])
-    𝚽₀ = @. sin(pi / 5 * x₀) * sin(pi / 5 * y₀)
-end
-
-# ╔═╡ 2572f6ec-a995-4512-b940-4797d81ac563
-function initial_level_set(shape::Tuple{Int64, Int64, Int64})
-    x₀ = reshape(collect(0:shape[begin]-1), shape[begin], 1, 1)
-    y₀ = reshape(collect(0:shape[begin+1]-1), 1, shape[begin+1], 1)
-    z₀ = reshape(collect(0:shape[begin+2]-1), 1, 1, shape[begin+2])
-    𝚽₀ = @. sin(pi / 5 * x₀) * sin(pi / 5 * y₀) * sin(pi / 5 * z₀)
-end
-
-# ╔═╡ 6488f940-a8c4-4749-acc9-3451605452f8
-function calculate_averages(
-	img::AbstractArray{T, N},
-	H𝚽::AbstractArray{S, N},
-	area::Int64, ∫u₀::Float64) where {T<:Real, S<:Bool, N}
-    ∫u₀H𝚽 = 0
-    ∫H𝚽 = 0
-    @inbounds for i in eachindex(img)
-        if H𝚽[i]
-            ∫u₀H𝚽 += img[i]
-            ∫H𝚽 += 1
-        end
-    end
-    ∫H𝚽ⁱ = area - ∫H𝚽
-    ∫u₀H𝚽ⁱ = ∫u₀ - ∫u₀H𝚽
-    c₁ = ∫u₀H𝚽 / max(1, ∫H𝚽)
-    c₂ = ∫u₀H𝚽ⁱ / max(1, ∫H𝚽ⁱ)
-
-    return c₁, c₂
-end
-
-# ╔═╡ fd3c68ec-fbaa-4c7f-b8d9-c858e2d4a105
-function chan_vese(img;
-                   μ::Real=0.25,
-                   λ₁::Real=1.0,
-                   λ₂::Real=1.0,
-                   tol::Real=1e-3,
-                   max_iter::Int=500,
-                   Δt::Real=0.5,
-                   normalize::Bool=false,
-                   init_level_set=initial_level_set(size(img)))
-	# Signs used in the codes and comments mainly follow paper[3] in the References.
-	axes(img) == axes(init_level_set) || throw(ArgumentError("axes of input image and init_level_set should be equal. Instead they are $(axes(img)) and $(axes(init_level_set))."))
-	img = Float64.(channelview(img))
-	N = ndims(img)
-	iter = 0
-	h = 1.0
-	del = tol + 1
-	if normalize
-		img .= img .- minimum(img)
-		if maximum(img) != 0
-			img .= img ./ maximum(img)
-		end
-	end
-	
-	# Precalculation of some constants which helps simplify some integration
-	area = length(img)   # area = ∫H𝚽 + ∫H𝚽ⁱ
-	∫u₀ = sum(img)       # ∫u₀ = ∫u₀H𝚽 + ∫u₀H𝚽ⁱ
-	
-	# Initialize the level set
-	𝚽ⁿ = init_level_set
-	
-	# Preallocation and initializtion
-	H𝚽 = trues(size(img)...)
-	𝚽ⁿ⁺¹ = similar(𝚽ⁿ)
-	
-	Δ = ntuple(d -> CartesianIndex(ntuple(i -> i == d ? 1 : 0, N)), N)
-	idx_first = first(CartesianIndices(𝚽ⁿ))
-	idx_last = last(CartesianIndices(𝚽ⁿ))
-	
-	while (del > tol) & (iter < max_iter)
-		ϵ = 1e-8
-		diff = 0
-	
-		# Calculate the average intensities
-		@. H𝚽 = 𝚽ⁿ > 0 # Heaviside function
-		c₁, c₂ = calculate_averages(img, H𝚽, area, ∫u₀) # Compute c₁(𝚽ⁿ), c₂(𝚽ⁿ)
-	
-		# Calculate the variation of level set 𝚽ⁿ
-		@inbounds @simd for idx in CartesianIndices(𝚽ⁿ)
-			𝚽₀  = 𝚽ⁿ[idx] # 𝚽ⁿ(x, y)
-			u₀ = img[idx]  # u₀(x, y)
-			𝚽₊ = broadcast(i->𝚽ⁿ[i], ntuple(d -> idx[d] != idx_last[d]  ? idx + Δ[d] : idx, N))
-			𝚽₋ = broadcast(i->𝚽ⁿ[i], ntuple(d -> idx[d] != idx_first[d] ? idx - Δ[d] : idx, N))
-	
-			# Solve the PDE of equation 9 in paper[3]
-			center_diff = ntuple(d -> (𝚽₊[d] - 𝚽₋[d])^2 / 4., N)
-			sum_center_diff = sum(center_diff)
-			C₊ = ntuple(d -> 1. / sqrt(ϵ + (𝚽₊[d] - 𝚽₀)^2 + sum_center_diff - center_diff[d]), N)
-			C₋ = ntuple(d -> 1. / sqrt(ϵ + (𝚽₋[d] - 𝚽₀)^2 + sum_center_diff - center_diff[d]), N)
-	
-			K = sum(𝚽₊ .* C₊) + sum(𝚽₋ .* C₋)
-			δₕ = h / (h^2 + 𝚽₀^2) # Regularised Dirac function
-			difference_from_average = - λ₁ * (u₀ - c₁) ^ 2 + λ₂ * (u₀ - c₂) ^ 2
-	
-			𝚽ⁿ⁺¹[idx] = 𝚽 = (𝚽₀ + Δt * δₕ * (μ * K + difference_from_average)) / (1. + μ * Δt * δₕ * (sum(C₊) + sum(C₋)))
-			diff += (𝚽 - 𝚽₀)^2
-		end
-	
-		del = sqrt(diff / area)
-	
-		# Reinitializing the level set is not strictly necessary, so this part of code is commented.
-		# If you wants to use the reinitialization, just uncommented codes following.
-		# Function `reinitialize!` is already prepared.
-	
-		# reinitialize!(𝚽ⁿ⁺¹, 𝚽ⁿ, Δt, h) # Reinitialize 𝚽 to be the signed distance function to its zero level set
-	
-		𝚽ⁿ .= 𝚽ⁿ⁺¹
-	
-		iter += 1
-	end
-	
-	return 𝚽ⁿ .> 0
 end
 
 # ╔═╡ f41ee6e2-b939-4d5e-87bc-82986883b79c
@@ -355,33 +230,6 @@ function download_instances(
 end
 
 
-# ╔═╡ 3b33d6cd-61fe-4fa3-a9fd-124db9abfded
-function process_instances(
-	instances_dicts, series_num_vec, output_dir, instance_number, ip_address
-)
-    if !isdir(output_dir)
-        mkpath(output_dir)
-    end
-
-    output_paths = String[]
-
-	for (idx, dict) in enumerate(instances_dicts)
-		_series = collect(keys(dict))[1]
-		
-	    path = joinpath(output_dir, string(series_num_vec[idx]))
-	    if !isdir(path)
-	        mkpath(path)
-	    end
-		
-	    download_instances(instances_dicts[idx], instance_number, path, ip_address)
-	
-	    output_path = joinpath(output_dir, string(_series))
-		push!(output_paths, output_path)
-	end
-
-    return output_paths
-end
-
 # ╔═╡ 58c2113f-6eb3-4ab4-a232-3c35281a0023
 md"""
 ## Docs
@@ -396,7 +244,6 @@ md"""
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
-	| 3076             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ d6670850-8f89-46fc-8db7-2617c58d656b
@@ -492,6 +339,33 @@ end
 # ╔═╡ 6ae680bf-4cdb-4d6d-986a-2923049da688
 instance_number = parse(Int64, instance_num)
 
+# ╔═╡ 3b33d6cd-61fe-4fa3-a9fd-124db9abfded
+function process_instances(
+	instances_dicts, series_num_vec, output_dir, instance_number, ip_address
+)
+    if !isdir(output_dir)
+        mkpath(output_dir)
+    end
+
+    output_paths = String[]
+
+	for (idx, dict) in enumerate(instances_dicts)
+		_series = collect(keys(dict))[1]
+		
+	    path = joinpath(output_dir, string(series_num_vec[idx]))
+	    if !isdir(path)
+	        mkpath(path)
+	    end
+		
+	    download_instances(instances_dicts[idx], instance_number, path, ip_address)
+	
+	    output_path = joinpath(output_dir, string(_series))
+		push!(output_paths, output_path)
+	end
+
+    return output_paths
+end
+
 # ╔═╡ c8dc5fc6-ec31-4aa4-9d98-92306f5fbc65
 output_paths = process_instances(instances_dicts, series_num_vec, output_dir, instance_number, ip_address)
 
@@ -511,9 +385,6 @@ dcm_arr = load_dcm_array(dcms);
 
 # ╔═╡ a37d2bd1-beb0-4e5f-bdf0-ab2df22a642c
 header = dcms[1].meta;
-
-# ╔═╡ 03f0e7af-f702-4ab0-8a5d-fa1cd6e15aba
-exposure_tag = (0x0018, 0x1151)
 
 # ╔═╡ e2364ef8-b54b-4673-b537-1133b36b5185
 mAs = header[(0x0018, 0x1151)]
@@ -596,92 +467,113 @@ function centroids_from_mask(mask)
 	centroids = Int.(round.(component_centroids(label_components(new_mask))[end]))
 end
 
-# ╔═╡ aeeec9ae-deeb-4b10-a8b5-77226fa37023
-function create_initial_level_set(dcm_arr)
-	half_x, half_y = size(dcm_arr, 1) ÷ 2, size(dcm_arr, 2) ÷ 2
-	init_circle = create_circle_mask(dcm_arr[:, :, 3], (half_x, half_y), 140)
-	
-	init_mask = BitArray(undef, size(dcm_arr))
-	for z in axes(dcm_arr, 3)
-		init_mask[:, :, z] = init_circle
-	end
-	init_mask = init_mask .* initial_level_set(size(init_mask))
-
-	return init_mask
-end
-
-# ╔═╡ 9ece1f94-522f-40f9-a95e-10f0ad518fb1
-heart_cv = chan_vese(dcm_arr; μ = 0.25, λ₁ = 1.0, λ₂ = 1.0, init_level_set = create_initial_level_set(dcm_arr), max_iter = 100, normalize = true);
-
 # ╔═╡ fa7d3528-460f-4129-96c2-12d08774bc59
 md"""
-!!! danger ""
-	- kV: 80, mAs: 10 => `threshold_low = 100`, `threshold_high = 300`
-	- kV: 80, mAs: 15 => `threshold_low = 100`, `threshold_high = 300`
-	- kV: 80, mAs: 20 => 
-	- kV: 80, mAs: 25 => 
-	- kV: 80, mAs: 30 => 
-	- kV: 80, mAs: 40 => `threshold_low = 50`, `threshold_high = 180`
-	- kV: 80, mAs: 50 =>
-	- kV: 80, mAs: 100 =>
-	- kV: 80, mAs: 150 =>
-	- kV: 80, mAs: 250 => `threshold_low = 0`, `threshold_high = 40`
+!!! info "Empirical Threshold Measurements for Heart Insert Segmentation"
+
+	Below are a handful of thresholds that were somewhat arbitrarily chosen and shown to work for segmentation. These were then used to create an interpolation for theshold values across all unknown values of kV and mAs
+
+	---
+
+	1. kV: 80, mAs: 10 => `threshold_low = 100`, `threshold_high = 300`
+	2. kV: 80, mAs: 15 =>
+	3. kV: 80, mAs: 20 => 
+	4. kV: 80, mAs: 25 => 
+	5. kV: 80, mAs: 30 => 
+	6. kV: 80, mAs: 40 => `threshold_low = 50`, `threshold_high = 180`
+	7. kV: 80, mAs: 50 =>
+	8. kV: 80, mAs: 100 =>
+	9. kV: 80, mAs: 150 =>
+	10. kV: 80, mAs: 250 => `threshold_low = 0`, `threshold_high = 40`
+
+	---
+
+	1. kV: 100, mAs: 10 => `threshold_low = 70`, `threshold_high = 230`
+	2. kV: 100, mAs: 15 =>
+	3. kV: 100, mAs: 20 =>
+	4. kV: 100, mAs: 25 => 
+	5. kV: 100, mAs: 30 =>
+	6. kV: 100, mAs: 40 => `threshold_low = 35`, `threshold_high = 90`
+	7. kV: 100, mAs: 50 => 
+	8. kV: 100, mAs: 100 => 
+	9. kV: 100, mAs: 150 =>
+	10. kV: 100, mAs: 250 => `threshold_low = 20`, `threshold_high = 80`
+
+	---
+	1. kV: 120, mAs: 10 => `threshold_low = 40`, `threshold_high = 150`
+	2. kV: 120, mAs: 15 =>
+	3. kV: 120, mAs: 20 =>
+	4. kV: 120, mAs: 25 =>
+	5. kV: 120, mAs: 30 =>
+	6. kV: 120, mAs: 40 => `threshold_low = 38`, `threshold_high = 95`
+	7. kV: 120, mAs: 50 =>
+	8. kV: 120, mAs: 100 =>
+	9. kV: 120, mAs: 150 => 
+	10. kV: 120, mAs: 250 => `threshold_low = 22`, `threshold_high = 85`
 """
 
-# ╔═╡ 0f03911c-14e8-47f2-ab16-3601cc80125a
-mA = [10, 40, 250] # independent var
+# ╔═╡ b8141de4-fa7f-4420-aee9-3496a8b9f5e5
+begin
+	mAs_arr = [10, 40, 150, 250]
+	threshold_low_arr = [100, 50, 10, 0]
+	threshold_high_arr = [300, 180, 70, 40]
+	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
+	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+end;
 
-# ╔═╡ 7bb08c11-910b-4f81-835a-0e2c27ff8970
-threshold_low_kV80 = [100, 50, 0] # dependent var1
-
-# ╔═╡ 8eab6127-5c1f-41a6-a98a-127eadd93d7d
-threshold_high_kV80 = [300, 180, 40] # dependent var2
-
-# ╔═╡ ee8809b2-9e37-417f-b887-afe016fcf8c7
-threshold_low_kV80_interp = QuadraticInterpolation(threshold_low_kV80, mA; extrapolate = true)
-
-# ╔═╡ 3d6311e7-7b42-4a8a-a23c-34b28b99d170
-threshold_high_kV80_interp = QuadraticInterpolation(threshold_high_kV80, mA; extrapolate = true)
-
-# ╔═╡ a802a052-e032-41f8-bbf0-40c6b365b162
-function threshold_low_high(
-	dcm_arr, heart_cv;
-	threshold_low = threshold_low_kV80_interp(mAs), threshold_high = threshold_high_kV80_interp(mAs)
-)
-	
-	thresholded_mask_low = dcm_arr .> threshold_low
-	thresholded_mask_high = dcm_arr .< threshold_high
-	masked_thresholded = thresholded_mask_high .& thresholded_mask_low .& heart_cv
-	return masked_thresholded
-end
-
-# ╔═╡ c80194a0-62d9-48af-ab4c-74c059c48b5f
-md"""
-!!! danger ""
-	- kV: 100, mAs: 25 => `threshold_low = 100`, `threshold_high = 200`
-	- kV: 100, mAs: 250 => `threshold_low = 50`, `threshold_high = 200`
-	- kV: 120, mAs: 150 => `threshold_low = 25`, `threshold_high = 100`
-	- kV: 120, mAs: 250 => `threshold_low = 50`, `threshold_high = 200`
-"""
-
-# ╔═╡ afa766f2-eeef-4963-a1e5-93f576500d0f
-masked_thresholded = threshold_low_high(dcm_arr, heart_cv);
-
-# ╔═╡ fcfbc9bf-87d0-4928-88ae-2b98edd4385a
-heatmap(masked_thresholded[:, :, 140])
-
-# ╔═╡ 11494618-59d6-451f-8f91-a04f4e1a24d4
-centroids = centroids_from_mask(masked_thresholded)
-
-# ╔═╡ c4d6c077-08f8-4620-8e0e-eadc50582e6f
+# ╔═╡ 05ce4939-28ec-46a9-848d-f0c71f39b807
 let
+	xspline = collect(10:0.1:250)
 	f = Figure()
-	ax = Axis(f[1, 1])
-	heatmap!(dcm_arr[:, :, centroids[3]], colormap = :grays)
-	heatmap!(heart_cv[:, :, centroids[3]], colormap = (:jet, 0.5))
-	scatter!(centroids[2], centroids[1])
+	ax = Axis(f[1, 1], xlabel = "mAs", ylabel = "HU", title = "kV = 80")
+	scatter!([10, 40, 250], [100, 50, 0]; label = "lower thresh")
+	scatter!([10, 40, 250], [300, 180, 40]; label = "upper thresh")
+	lines!(xspline, [threshold_low_interp(i) for i in xspline])
 	f
 end
+
+# ╔═╡ 6088ace4-7a6a-491c-8546-1e1e686b9d34
+function calculate_thresholds(
+	kV, mAs;
+	mAs_arr = [10, 40, 250]
+)
+	if kV == 80
+		threshold_low_arr = [100, 50, 1]
+		threshold_high_arr = [300, 180, 40]
+    elseif kV == 100
+		threshold_low_arr = [70, 35, 20]
+		threshold_high_arr = [230, 90, 80]
+    elseif kV == 120
+		threshold_low_arr = [40, 38, 22]
+		threshold_high_arr = [150, 95, 85]
+    end
+
+	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
+	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+
+	threshold_low = threshold_low_interp(mAs)
+	threshold_high = threshold_high_interp(mAs)
+    return threshold_low, threshold_high
+end
+
+# ╔═╡ 411092cf-de9b-4206-af75-f45513b8b046
+function threshold_low_high(dcm_arr, kV, mAs)
+    threshold_low, threshold_high = calculate_thresholds(kV, mAs)
+	thresholded_mask_low = dcm_arr .> threshold_low
+    thresholded_mask_high = dcm_arr .< threshold_high
+    masked_thresholded = thresholded_mask_high .& thresholded_mask_low
+
+    return masked_thresholded
+end
+
+# ╔═╡ afa766f2-eeef-4963-a1e5-93f576500d0f
+mask_thresholded = threshold_low_high(dcm_arr, kV, mAs);
+
+# ╔═╡ fcfbc9bf-87d0-4928-88ae-2b98edd4385a
+heatmap(mask_thresholded[:, :, 140])
+
+# ╔═╡ 11494618-59d6-451f-8f91-a04f4e1a24d4
+centroids = centroids_from_mask(mask_thresholded)
 
 # ╔═╡ 3024a728-4e49-4e3c-a56e-e6038bbdf037
 md"""
@@ -693,7 +585,10 @@ md"""
 heart_rad = 100
 
 # ╔═╡ e9e30e85-2191-4dc9-a042-e579922987f5
+# ╠═╡ disabled = true
+#=╠═╡
 heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad);
+  ╠═╡ =#
 
 # ╔═╡ 9c123d00-c1cb-49b7-bbf3-ae4edc8057c7
 md"""
@@ -704,6 +599,7 @@ md"""
 @bind z2 Slider(axes(dcm_arr, 3), default=130, show_value=true)
 
 # ╔═╡ 3c1f6f19-763a-4c53-9222-7c6f928bd88b
+#=╠═╡
 let
 	f = Figure()
 
@@ -713,6 +609,7 @@ let
 
 	f
 end
+  ╠═╡ =#
 
 # ╔═╡ e02ae993-1a0b-4fef-8a26-65a459876081
 md"""
@@ -720,12 +617,17 @@ md"""
 """
 
 # ╔═╡ fba381e3-796b-4150-b383-fb0bad70afbc
+#=╠═╡
 dcm_heart = dcm_arr .* heart_mask;
+  ╠═╡ =#
 
 # ╔═╡ 4e13c7d0-b613-40aa-b005-321a80c5437e
+#=╠═╡
 @bind d Slider(axes(dcm_heart, 3), default=130, show_value=true)
+  ╠═╡ =#
 
 # ╔═╡ 4270ddfa-43ac-49da-98c4-3066033432cf
+#=╠═╡
 let
 	f = Figure()
 
@@ -734,6 +636,7 @@ let
 	
 	f
 end
+  ╠═╡ =#
 
 # ╔═╡ c1b73667-d9f0-4b13-afab-e68197fbf8c5
 md"""
@@ -780,33 +683,21 @@ function get_insert_centers(dcm, threshold)
 	
 end
 
-# ╔═╡ 24b17874-2e77-49f9-8452-121a63f12feb
-md"""
-!!! danger ""
-	- kV: 80, mAs: 10 => `insert_threshold = 500`
-	- kV: 80, mAs: 15 => `insert_threshold = 400`
-
-
-
-	- kV: 120, mAs: 150, => `insert_threshold = 200`
-"""
-
 # ╔═╡ c018a0fe-ac18-4491-90ab-aad4ba19af39
 insert_threshold = 500
 
 # ╔═╡ d45ddd4d-5bde-42cf-b072-d0f66078c335
+#=╠═╡
 centers_a, centers_b = get_insert_centers(dcm_heart, insert_threshold);
-
-# ╔═╡ 9bb84424-b09a-451e-b9b0-c984fd12299a
-centers_a
-
-# ╔═╡ 54f3dfdc-2132-40da-9203-bb34ff88b009
-centers_b
+  ╠═╡ =#
 
 # ╔═╡ b606648a-54e5-4426-b90c-65d5b5fa8164
+#=╠═╡
 @bind z3 Slider([centers_a[3], centers_b[3]], show_value = true)
+  ╠═╡ =#
 
 # ╔═╡ b955f64b-dcc4-4ad2-90dd-f1b9bc51f889
+#=╠═╡
 let
 	msize = 10
 	f = Figure()
@@ -820,6 +711,7 @@ let
 
 	f
 end
+  ╠═╡ =#
 
 # ╔═╡ 45cfb064-dfae-4d8b-a367-e6da668d2e8f
 # Modify the in_cylinder function to accept Static Vectors
@@ -877,7 +769,9 @@ function create_cylinder(array, pt1, pt2, radius, offset)
 end
 
 # ╔═╡ 5c57594f-dd23-42ee-ab87-ef690767291a
+#=╠═╡
 @bind z Slider(axes(dcm_heart, 3), default=div(size(dcm_heart, 3), 2), show_value=true)
+  ╠═╡ =#
 
 # ╔═╡ 7b691778-572e-4900-b3fd-b1cb8bd61c44
 md"""
@@ -885,11 +779,13 @@ md"""
 """
 
 # ╔═╡ 7e8d3334-a50a-4fe0-911c-12e214ea8fbb
+#=╠═╡
 begin
 	binary_calibration = falses(size(dcm_heart))
 	binary_calibration[centers_a...] = true
 	binary_calibration = dilate(binary_calibration)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 941cb188-384a-4775-8145-df9e704d1802
 md"""
@@ -948,9 +844,12 @@ end
 cylinder_rad = diameter * 2
 
 # ╔═╡ d8519bec-6ae8-4575-80be-6b2bfcb3fc84
+#=╠═╡
 cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25);
+  ╠═╡ =#
 
 # ╔═╡ ad45ed1c-d103-449d-b8c4-49c56f465cde
+#=╠═╡
 let
 	f = Figure(size = (1000, 1200))
 	ax = Axis(f[1, 1], title = "Original")
@@ -961,14 +860,18 @@ let
 
 	f
 end
+  ╠═╡ =#
 
 # ╔═╡ 5d301dd8-e23b-4156-8538-9c626b5a9b0b
+#=╠═╡
 begin
 	_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad + 6, -25);
 	background_ring = Bool.(_background_ring .- cylinder)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 309b2a1b-9760-47e3-b0be-00cf1a8716f8
+#=╠═╡
 let
 	idxs = getindex.(findall(isone, cylinder[:, :, z]), [1 2])
 	idxs_ring = getindex.(findall(isone, background_ring[:, :, z]), [1 2])
@@ -983,6 +886,7 @@ let
 
 	f
 end
+  ╠═╡ =#
 
 # ╔═╡ 6a9ab52a-2586-4d48-b035-7c7ec9ff7220
 num_inserts = 3
@@ -1003,10 +907,14 @@ md"""
 """
 
 # ╔═╡ b3b871ff-9af0-406e-a4fd-989459f915c4
+#=╠═╡
 hu_calcium_400 = mean(dcm_heart[binary_calibration])
+  ╠═╡ =#
 
 # ╔═╡ a96e6cfd-fcf8-4868-83b2-a42143c99d93
+#=╠═╡
 std(dcm_heart[binary_calibration])
+  ╠═╡ =#
 
 # ╔═╡ b4763fb3-0496-4ee3-a846-35c2ad22d0d6
 ρ_calcium_400 = 0.400 # mg/mm^3
@@ -1015,10 +923,14 @@ std(dcm_heart[binary_calibration])
 voxel_size = pixel_size[1] * pixel_size[2] * pixel_size[3]
 
 # ╔═╡ 79bc8e94-1568-49c2-a9c8-55b52427cbd1
+#=╠═╡
 hu_heart_tissue_bkg = mean(dcm_heart[background_ring])
+  ╠═╡ =#
 
 # ╔═╡ 3163ccbd-e53f-42a9-9fa3-7fb5430104b7
+#=╠═╡
 vf_mass = score(dcm_heart_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
+  ╠═╡ =#
 
 # ╔═╡ f361009d-ce57-43dd-bde3-b27f20cd38df
 md"""
@@ -1026,10 +938,14 @@ md"""
 """
 
 # ╔═╡ 906e5abb-4bdf-4fd8-916e-c97644b97fa6
+#=╠═╡
 mass_cal_factor = ρ_calcium_400 / hu_calcium_400
+  ╠═╡ =#
 
 # ╔═╡ 66fbeffb-9012-43c2-b5b5-e96e0fd75e7e
+#=╠═╡
 a_agatston, a_volume, a_mass = score(dcm_heart_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2848,11 +2764,6 @@ version = "3.5.0+0"
 # ╟─47c3e64e-20fd-44f5-a391-8fc2f34aeaea
 # ╠═cb065fb5-5fa2-40c2-80c8-513d2a6f0d6d
 # ╠═f03d2e9d-6ff7-4359-b0fa-47ef19e6dfba
-# ╟─5558b6d9-313d-4d0e-aa6f-2bfb55b0ddcb
-# ╠═fd3c68ec-fbaa-4c7f-b8d9-c858e2d4a105
-# ╠═3e02bf6d-d38f-4f03-8c05-051a4e109944
-# ╠═2572f6ec-a995-4512-b940-4797d81ac563
-# ╠═6488f940-a8c4-4749-acc9-3451605452f8
 # ╟─f41ee6e2-b939-4d5e-87bc-82986883b79c
 # ╠═68269c5d-3f91-43e2-9b70-0e6e8f8b0e73
 # ╟─be3a5b11-4fc8-41a6-9f27-e3345f1c0738
@@ -2863,7 +2774,6 @@ version = "3.5.0+0"
 # ╠═15c78a87-7733-42f2-8169-b6059619aa6f
 # ╠═edbbab37-598c-4773-bc69-7bf64b16a54e
 # ╠═3031e818-08df-4949-a549-9cb1e0c5edf3
-# ╠═3b33d6cd-61fe-4fa3-a9fd-124db9abfded
 # ╟─58c2113f-6eb3-4ab4-a232-3c35281a0023
 # ╟─1fce1552-e97e-4eb2-89ad-5d245455b6e1
 # ╟─d6670850-8f89-46fc-8db7-2617c58d656b
@@ -2882,13 +2792,13 @@ version = "3.5.0+0"
 # ╠═735b6e9b-2c66-49b0-8bf6-a13740eab2bf
 # ╠═108e9baa-4378-449e-a6e2-e6a7495513dd
 # ╠═6ae680bf-4cdb-4d6d-986a-2923049da688
+# ╠═3b33d6cd-61fe-4fa3-a9fd-124db9abfded
 # ╠═c8dc5fc6-ec31-4aa4-9d98-92306f5fbc65
 # ╠═f5e340dc-9e73-46ea-ac16-bce72267d888
 # ╟─dae88142-7604-4f87-a95c-e5a370280c8d
 # ╠═09fe5eab-c813-43f0-80f6-fda3361160e7
 # ╠═346a3316-067b-4f15-93a3-bba0be9458cc
 # ╠═a37d2bd1-beb0-4e5f-bdf0-ab2df22a642c
-# ╠═03f0e7af-f702-4ab0-8a5d-fa1cd6e15aba
 # ╠═e2364ef8-b54b-4673-b537-1133b36b5185
 # ╠═bc7985d4-cc47-417c-b31d-64dacb422fed
 # ╠═7f9f9eb3-c114-44e4-b180-3cb079ec0689
@@ -2901,20 +2811,15 @@ version = "3.5.0+0"
 # ╠═bb9caf89-984d-4cac-bd35-8324568169c5
 # ╠═38ec696f-7dad-47dd-b1ef-880f5424922e
 # ╠═1b5b2ad2-5aae-4cff-a58a-7d4a46e501cc
-# ╠═aeeec9ae-deeb-4b10-a8b5-77226fa37023
-# ╠═9ece1f94-522f-40f9-a95e-10f0ad518fb1
-# ╟─c4d6c077-08f8-4620-8e0e-eadc50582e6f
 # ╟─fa7d3528-460f-4129-96c2-12d08774bc59
+# ╠═b8141de4-fa7f-4420-aee9-3496a8b9f5e5
+# ╠═b777df44-527f-4796-988b-2a4c99e3de6f
+# ╠═05ce4939-28ec-46a9-848d-f0c71f39b807
 # ╠═6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
-# ╠═0f03911c-14e8-47f2-ab16-3601cc80125a
-# ╠═7bb08c11-910b-4f81-835a-0e2c27ff8970
-# ╠═8eab6127-5c1f-41a6-a98a-127eadd93d7d
-# ╠═ee8809b2-9e37-417f-b887-afe016fcf8c7
-# ╠═3d6311e7-7b42-4a8a-a23c-34b28b99d170
-# ╠═a802a052-e032-41f8-bbf0-40c6b365b162
-# ╠═fcfbc9bf-87d0-4928-88ae-2b98edd4385a
-# ╟─c80194a0-62d9-48af-ab4c-74c059c48b5f
+# ╠═6088ace4-7a6a-491c-8546-1e1e686b9d34
+# ╠═411092cf-de9b-4206-af75-f45513b8b046
 # ╠═afa766f2-eeef-4963-a1e5-93f576500d0f
+# ╠═fcfbc9bf-87d0-4928-88ae-2b98edd4385a
 # ╠═11494618-59d6-451f-8f91-a04f4e1a24d4
 # ╟─3024a728-4e49-4e3c-a56e-e6038bbdf037
 # ╠═f9f82807-042f-4d6e-a4c0-e7288e17afb7
@@ -2925,15 +2830,11 @@ version = "3.5.0+0"
 # ╟─e02ae993-1a0b-4fef-8a26-65a459876081
 # ╠═fba381e3-796b-4150-b383-fb0bad70afbc
 # ╟─4e13c7d0-b613-40aa-b005-321a80c5437e
-# ╠═4270ddfa-43ac-49da-98c4-3066033432cf
-# ╠═61628bac-5eeb-4832-aacb-c461ad0a7dcb
+# ╟─4270ddfa-43ac-49da-98c4-3066033432cf
 # ╟─c1b73667-d9f0-4b13-afab-e68197fbf8c5
 # ╠═5428ab86-0d66-4872-8b73-507cd978a57c
-# ╟─24b17874-2e77-49f9-8452-121a63f12feb
 # ╠═c018a0fe-ac18-4491-90ab-aad4ba19af39
 # ╠═d45ddd4d-5bde-42cf-b072-d0f66078c335
-# ╠═9bb84424-b09a-451e-b9b0-c984fd12299a
-# ╠═54f3dfdc-2132-40da-9203-bb34ff88b009
 # ╟─b606648a-54e5-4426-b90c-65d5b5fa8164
 # ╟─b955f64b-dcc4-4ad2-90dd-f1b9bc51f889
 # ╠═45cfb064-dfae-4d8b-a367-e6da668d2e8f
