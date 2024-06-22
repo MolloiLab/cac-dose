@@ -240,10 +240,20 @@ md"""
 !!! info ""
 	See `README.md` in the root directory for more info on the scans
 
+	NEED RESCAN:
+
 	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
+
+
+	Good:
+
+	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
+	| ---------------- | --------- | -------------- | --------------- | --------------- |
+	| 3082             | C_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3083             | F_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ d6670850-8f89-46fc-8db7-2617c58d656b
@@ -291,10 +301,10 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3074"))
+				Child(TextField(default="3083"))
 			)""",
 			md""" $(ser): $(
-				Child(TextField(default="30"))
+				Child(TextField(default="11"))
 			)""",
 			md""" $(inst): $(
 				Child(TextField(default="1"))
@@ -387,10 +397,13 @@ dcm_arr = load_dcm_array(dcms);
 header = dcms[1].meta;
 
 # ╔═╡ e2364ef8-b54b-4673-b537-1133b36b5185
-mAs = header[(0x0018, 0x1151)]
+mA = header[(0x0018, 0x1151)]
 
 # ╔═╡ bc7985d4-cc47-417c-b31d-64dacb422fed
 kV = header[(0x0018, 0x0060)]
+
+# ╔═╡ 01cce57b-b3d3-4c78-a7b3-ee5d10a1f688
+ctdi = header[(0x0018, 0x9345)] # mGy
 
 # ╔═╡ 7f9f9eb3-c114-44e4-b180-3cb079ec0689
 x_space, y_space = header[(0x0028, 0x0030)]
@@ -467,58 +480,13 @@ function centroids_from_mask(mask)
 	centroids = Int.(round.(component_centroids(label_components(new_mask))[end]))
 end
 
-# ╔═╡ fa7d3528-460f-4129-96c2-12d08774bc59
-md"""
-!!! info "Empirical Threshold Measurements for Heart Insert Segmentation"
-
-	Below are a handful of thresholds that were somewhat arbitrarily chosen and shown to work for segmentation. These were then used to create an interpolation for theshold values across all unknown values of kV and mAs
-
-	---
-
-	1. kV: 80, mAs: 10 => `threshold_low = 100`, `threshold_high = 300`
-	2. kV: 80, mAs: 15 =>
-	3. kV: 80, mAs: 20 => `threshold_low = 80`, `threshold_high = 255`
-	4. kV: 80, mAs: 25 => 
-	5. kV: 80, mAs: 30 => 
-	6. kV: 80, mAs: 40 => `threshold_low = 50`, `threshold_high = 180`
-	7. kV: 80, mAs: 50 =>
-	8. kV: 80, mAs: 100 => `threshold_low = 20`, `threshold_high = 90`
-	9. kV: 80, mAs: 150 => `threshold_low = 10`, `threshold_high = 65`
-	10. kV: 80, mAs: 250 => `threshold_low = 0`, `threshold_high = 40`
-
-	---
-
-	1. kV: 100, mAs: 10 => `threshold_low = 70`, `threshold_high = 230`
-	2. kV: 100, mAs: 15 =>
-	3. kV: 100, mAs: 20 => `threshold_low = 55`, `threshold_high = 150`
-	4. kV: 100, mAs: 25 => 
-	5. kV: 100, mAs: 30 =>
-	6. kV: 100, mAs: 40 => `threshold_low = 35`, `threshold_high = 90`
-	7. kV: 100, mAs: 50 => 
-	8. kV: 100, mAs: 100 => `threshold_low = 31`, `threshold_high = 83`
-	9. kV: 100, mAs: 150 => `threshold_low = 24`, `threshold_high = 83`
-	10. kV: 100, mAs: 250 => `threshold_low = 20`, `threshold_high = 80`
-
-	---
-	1. kV: 120, mAs: 10 => `threshold_low = 40`, `threshold_high = 150`
-	2. kV: 120, mAs: 15 =>
-	3. kV: 120, mAs: 20 =>
-	4. kV: 120, mAs: 25 =>
-	5. kV: 120, mAs: 30 =>
-	6. kV: 120, mAs: 40 => `threshold_low = 38`, `threshold_high = 95`
-	7. kV: 120, mAs: 50 =>
-	8. kV: 120, mAs: 100 => `threshold_low = 27`, `threshold_high = 90`
-	9. kV: 120, mAs: 150 => `threshold_low = 23`, `threshold_high = 88`
-	10. kV: 120, mAs: 250 => `threshold_low = 22`, `threshold_high = 85`
-"""
-
 # ╔═╡ b8141de4-fa7f-4420-aee9-3496a8b9f5e5
 begin
-	mAs_arr = [10, 20, 40, 100, 150, 250]
-	threshold_low_arr = [100, 80, 50, 20, 10, 0]
-	threshold_high_arr = [300, 255, 180, 90, 65, 40]
-	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
-	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+	mA_arr = [10, 15, 20, 25, 30, 40, 50, 100, 150, 250]
+	threshold_low_arr = [40, 40, 39, 39, 39, 39, 39, 35, 23, 22]
+	threshold_high_arr = [150, 110, 105, 100, 100, 95, 90, 90, 88, 85]
+	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mA_arr; extrapolate = true)
+	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mA_arr; extrapolate = true)
 end;
 
 # ╔═╡ 05ce4939-28ec-46a9-848d-f0c71f39b807
@@ -526,40 +494,43 @@ let
 	xspline = collect(10:0.1:250)
 	f = Figure()
 	ax = Axis(f[1, 1], xlabel = "mAs", ylabel = "HU", title = "kV = 80")
-	scatter!(mAs_arr, threshold_low_arr; label = "lower thresh")
-	scatter!(mAs_arr, threshold_high_arr; label = "upper thresh")
+	scatter!(mA_arr, threshold_low_arr; label = "lower thresh")
+	scatter!(mA_arr, threshold_high_arr; label = "upper thresh")
 	lines!(xspline, [threshold_low_interp(i) for i in xspline])
 	lines!(xspline, [threshold_high_interp(i) for i in xspline])
 	f
 end
 
+# ╔═╡ 9f2ca7e0-3c90-45d7-aad3-a4e21c37f022
+kV, mA
+
 # ╔═╡ 6088ace4-7a6a-491c-8546-1e1e686b9d34
-function calculate_thresholds(
-	kV, mAs;
-	mAs_arr = [10, 20, 40, 100, 150, 250]
-)
+function calculate_thresholds(kV, mA)
 	if kV == 80
+		mA_arr = [10, 20, 40, 100, 150, 250]
 		threshold_low_arr = [100, 80, 50, 20, 10, 0]
 		threshold_high_arr = [300, 255, 180, 90, 65, 40]
     elseif kV == 100
-		threshold_low_arr = [70, 55, 35, 31, 24, 20]
-		threshold_high_arr = [230, 150, 90, 83, 83, 80]
+		mA_arr = [10, 20, 40, 100, 150, 250]
+		threshold_low_arr = [70, 55, 35, 35, 33, 25]
+		threshold_high_arr = [230, 150, 90, 88, 85, 80]
     elseif kV == 120
-		threshold_low_arr = [40, 39, 38, 27, 23, 22]
-		threshold_high_arr = [150, 105, 95, 90, 88, 85]
+		mA_arr = [10, 15, 20, 25, 30, 40, 50, 100, 150, 250]
+		threshold_low_arr = [40, 40, 39, 39, 39, 39, 39, 35, 23, 22]
+		threshold_high_arr = [150, 110, 105, 100, 100, 95, 90, 90, 88, 85]
     end
 
-	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
-	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mA_arr; extrapolate = true)
+	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mA_arr; extrapolate = true)
 
-	threshold_low = threshold_low_interp(mAs)
-	threshold_high = threshold_high_interp(mAs)
+	threshold_low = threshold_low_interp(mA)
+	threshold_high = threshold_high_interp(mA)
     return threshold_low, threshold_high
 end
 
 # ╔═╡ 411092cf-de9b-4206-af75-f45513b8b046
-function threshold_low_high(dcm_arr, kV, mAs)
-    threshold_low, threshold_high = calculate_thresholds(kV, mAs)
+function threshold_low_high(dcm_arr, kV, mA)
+    threshold_low, threshold_high = calculate_thresholds(kV, mA)
 	@info threshold_low, threshold_high
 	thresholded_mask_low = dcm_arr .> threshold_low
     thresholded_mask_high = dcm_arr .< threshold_high
@@ -569,7 +540,7 @@ function threshold_low_high(dcm_arr, kV, mAs)
 end
 
 # ╔═╡ afa766f2-eeef-4963-a1e5-93f576500d0f
-mask_thresholded = threshold_low_high(dcm_arr, kV, mAs);
+mask_thresholded = threshold_low_high(dcm_arr, kV, mA);
 
 # ╔═╡ fcfbc9bf-87d0-4928-88ae-2b98edd4385a
 heatmap(mask_thresholded[:, :, 140])
@@ -584,7 +555,7 @@ md"""
 """
 
 # ╔═╡ f9f82807-042f-4d6e-a4c0-e7288e17afb7
-heart_rad = 100
+heart_rad = 95
 
 # ╔═╡ e9e30e85-2191-4dc9-a042-e579922987f5
 heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad);
@@ -821,14 +792,14 @@ elseif insert_name == "C" || insert_name == "F"
 	diameter = 5.0 # mm
 end
 
-# ╔═╡ 94ab2a1d-6816-4684-a2ff-c763c6c3592b
-cylinder_rad = diameter + 1.2
+# ╔═╡ dcb26f26-f62c-40cd-9b2d-fedc9db5c85e
+cylinder_rad = diameter * 2.0
 
 # ╔═╡ d8519bec-6ae8-4575-80be-6b2bfcb3fc84
 cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25);
 
 # ╔═╡ 4b767984-077e-4801-bfdb-5297a4ea637d
-dcm_heart_clean = remove_outliers(dcm_heart[cylinder]);
+cylinder_clean = remove_outliers(dcm_heart[cylinder]);
 
 # ╔═╡ ad45ed1c-d103-449d-b8c4-49c56f465cde
 let
@@ -837,7 +808,7 @@ let
 	hist!(dcm_heart[cylinder])
 
 	ax = Axis(f[2, 1], title = "Clean")
-	hist!(dcm_heart_clean)
+	hist!(cylinder_clean)
 
 	f
 end
@@ -863,6 +834,9 @@ let
 
 	f
 end
+
+# ╔═╡ b483e08a-3970-4825-b548-4b7a8026aeed
+background_clean = remove_outliers(dcm_heart[background_ring]);
 
 # ╔═╡ 6a9ab52a-2586-4d48-b035-7c7ec9ff7220
 num_inserts = 3
@@ -895,10 +869,11 @@ std(dcm_heart[binary_calibration])
 voxel_size = pixel_size[1] * pixel_size[2] * pixel_size[3]
 
 # ╔═╡ 79bc8e94-1568-49c2-a9c8-55b52427cbd1
-hu_heart_tissue_bkg = mean(dcm_heart[background_ring])
+# hu_heart_tissue_bkg = mean(dcm_heart[background_ring])
+hu_heart_tissue_bkg = mean(background_clean)
 
 # ╔═╡ 3163ccbd-e53f-42a9-9fa3-7fb5430104b7
-vf_mass = score(dcm_heart_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
+vf_mass = score(cylinder_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
 
 # ╔═╡ f361009d-ce57-43dd-bde3-b27f20cd38df
 md"""
@@ -909,7 +884,10 @@ md"""
 mass_cal_factor = ρ_calcium_400 / hu_calcium_400
 
 # ╔═╡ 66fbeffb-9012-43c2-b5b5-e96e0fd75e7e
-a_agatston, a_volume, a_mass = score(dcm_heart_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+a_agatston, a_volume, a_mass = score(cylinder_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+
+# ╔═╡ 6fc57bee-0130-4624-b8f9-2b9f650b1e73
+a_mass
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2765,6 +2743,7 @@ version = "3.5.0+0"
 # ╠═a37d2bd1-beb0-4e5f-bdf0-ab2df22a642c
 # ╠═e2364ef8-b54b-4673-b537-1133b36b5185
 # ╠═bc7985d4-cc47-417c-b31d-64dacb422fed
+# ╠═01cce57b-b3d3-4c78-a7b3-ee5d10a1f688
 # ╠═7f9f9eb3-c114-44e4-b180-3cb079ec0689
 # ╠═a2d407f4-d0b3-478d-9842-07afb8ca2f49
 # ╠═3aa34879-2562-4509-95f6-ef0bab905f59
@@ -2775,11 +2754,11 @@ version = "3.5.0+0"
 # ╠═bb9caf89-984d-4cac-bd35-8324568169c5
 # ╠═38ec696f-7dad-47dd-b1ef-880f5424922e
 # ╠═1b5b2ad2-5aae-4cff-a58a-7d4a46e501cc
-# ╟─fa7d3528-460f-4129-96c2-12d08774bc59
 # ╠═6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
 # ╠═b8141de4-fa7f-4420-aee9-3496a8b9f5e5
 # ╠═b777df44-527f-4796-988b-2a4c99e3de6f
 # ╟─05ce4939-28ec-46a9-848d-f0c71f39b807
+# ╠═9f2ca7e0-3c90-45d7-aad3-a4e21c37f022
 # ╠═6088ace4-7a6a-491c-8546-1e1e686b9d34
 # ╠═411092cf-de9b-4206-af75-f45513b8b046
 # ╠═afa766f2-eeef-4963-a1e5-93f576500d0f
@@ -2803,7 +2782,7 @@ version = "3.5.0+0"
 # ╟─b955f64b-dcc4-4ad2-90dd-f1b9bc51f889
 # ╠═45cfb064-dfae-4d8b-a367-e6da668d2e8f
 # ╠═34116faa-f7cb-4ea5-b899-3c7ed69cf541
-# ╠═94ab2a1d-6816-4684-a2ff-c763c6c3592b
+# ╠═dcb26f26-f62c-40cd-9b2d-fedc9db5c85e
 # ╠═d8519bec-6ae8-4575-80be-6b2bfcb3fc84
 # ╠═5d301dd8-e23b-4156-8538-9c626b5a9b0b
 # ╟─5c57594f-dd23-42ee-ab87-ef690767291a
@@ -2813,6 +2792,7 @@ version = "3.5.0+0"
 # ╟─941cb188-384a-4775-8145-df9e704d1802
 # ╠═b214416b-b079-4b82-969a-dcefd258013f
 # ╠═4b767984-077e-4801-bfdb-5297a4ea637d
+# ╠═b483e08a-3970-4825-b548-4b7a8026aeed
 # ╟─ad45ed1c-d103-449d-b8c4-49c56f465cde
 # ╟─a3d40c53-0584-4c8b-a675-88a44f457f89
 # ╟─e61a9acc-1a1d-41ec-967f-8633eca40021
@@ -2836,5 +2816,6 @@ version = "3.5.0+0"
 # ╟─f361009d-ce57-43dd-bde3-b27f20cd38df
 # ╠═906e5abb-4bdf-4fd8-916e-c97644b97fa6
 # ╠═66fbeffb-9012-43c2-b5b5-e96e0fd75e7e
+# ╠═6fc57bee-0130-4624-b8f9-2b9f650b1e73
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

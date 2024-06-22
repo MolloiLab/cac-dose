@@ -27,17 +27,20 @@ md"""
 # ╔═╡ 2e38bd34-7a05-4325-ba90-d0e764e5611b
 root_dir = joinpath(pwd(), "data")
 
-# ╔═╡ 2fe50296-6606-452e-935f-728b7a31a112
-a_df = read(joinpath(root_dir, "A_0bpm.csv"), DataFrame);
+# ╔═╡ e2d5102b-1842-415c-b694-7f37be562937
+c_df = read(joinpath(root_dir, "C_0bpm.csv"), DataFrame);
 
-# ╔═╡ 30426958-50d2-478d-860e-efb42971f507
-a_df_80, a_df_100, a_df_120 = groupby(a_df, :kV);
+# ╔═╡ 98a9145b-0c7e-4277-b912-ffffd3b2b1a6
+c_df_80, c_df_100, c_df_120 = groupby(c_df, :kV);
 
-# ╔═╡ 6ee88045-bd96-453d-b16f-cab91cdd6fe8
-b_df = read(joinpath(root_dir, "B_0bpm.csv"), DataFrame);
+# ╔═╡ ba29fa79-c096-4da9-b6db-61b8ff1d158a
+f_df = read(joinpath(root_dir, "F_0bpm.csv"), DataFrame);
 
-# ╔═╡ 95508e01-f8b9-4189-8181-4af9125ae148
-b_df_80, b_df_100, b_df_120 = groupby(b_df, :kV);
+# ╔═╡ 72c80245-ba42-48d5-82ba-846feaa5f2b8
+f_df_80, f_df_100, f_df_120 = groupby(f_df, :kV);
+
+# ╔═╡ 9b72cccf-a2ae-4f41-a9a7-3266000cf265
+f_df
 
 # ╔═╡ 9281994e-f515-4877-829c-2fadc7a1f9a4
 md"""
@@ -57,31 +60,31 @@ function extract_title(df)
 		title = "$(Int(df[1, :kV])) kV \nInsert Density: 100 mg/cc \nInsert Diameter: 1.2 mm "
 	elseif df[1, :insert_name] == "E"
 		title = "$(Int(df[1, :kV])) kV \nInsert Density: 100 mg/cc \nInsert Diameter: 3.0 mm "
-	elseif df[1, :insert_name] == "F"
+	elseif df[1, :insert_name] == "F" || df[1, :insert_name] == false
 		title = "$(Int(df[1, :kV])) kV \nInsert Density: 100 mg/cc \nInsert Diameter: 5.0 mm "
 	end
 	return title
 end
 
-# ╔═╡ 17330eb1-0900-4e7a-9b17-1963e64c435c
+# ╔═╡ fb5641cc-e158-4181-9c6c-819733d044bb
 md"""
-### (A) Density: 50 mg/cc, Diameter: 1.2 mm
+### (C) Density: 50 mg/cc, Diameter: 5.0 mm
 """
 
-# ╔═╡ 2575d2a4-bf01-40f7-ba45-cfd7dbf62a28
+# ╔═╡ 2230a4ab-dc36-4392-8872-d38ce6d22024
 let
     f = Figure()
 
-	df = a_df_80
-	xs = eachindex(df[:, :mAs])
+	df = c_df_80
+	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
 	ax = Axis(
 		f[1, 1],
 		title = extract_title(df),
 		ylabel = "Mass (mg)",
-		xlabel = "mAs",
-		xticks = (xs, string.(Int.(df[:, :mAs])))
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
 	)
 	
 
@@ -109,32 +112,34 @@ let
 	f
 end
 
-# ╔═╡ c205a05d-62f3-4cd3-b54a-681298e60cdd
+# ╔═╡ fe6af106-df3c-4439-ae86-75a77196dfdd
 let
-	f = Figure()
-	
-	df = a_df_100
-	xs = eachindex(df[:, :mAs])
+    f = Figure()
+
+	rnge = 1:10
+
+	df = c_df_100
+	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
 	ax = Axis(
 		f[1, 1],
 		title = extract_title(df),
 		ylabel = "Mass (mg)",
-		xlabel = "mAs",
-		xticks = (xs, string.(Int.(df[:, :mAs])))
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
 	)
 	
 
 	barplot!(
-		xs .- dodge/2,
-		df[:, :vf_mass];
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
 		width = barwidth,
 		label="Volume Fraction Mass"
 	)
 	barplot!(
-		xs .+ dodge/2,
-		df[:, :agatston_mass];
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
 		width=barwidth,
 		label="Agatston Mass"
 	)
@@ -146,36 +151,38 @@ let
 		color = :red
 	)
 	axislegend(ax)
-	
+
 	f
 end
 
-# ╔═╡ d1257a1c-9e2d-4eb2-9c03-d3b1ba537e28
+# ╔═╡ 46406b42-67d1-4148-b939-d259709fe798
 let
-	f = Figure()
-	
-	df = a_df_120
-	xs = eachindex(df[:, :mAs])
+    f = Figure()
+
+	rnge = 1:10
+
+	df = c_df_120
+	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
 	ax = Axis(
 		f[1, 1],
 		title = extract_title(df),
 		ylabel = "Mass (mg)",
-		xlabel = "mAs",
-		xticks = (xs, string.(Int.(df[:, :mAs])))
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
 	)
 	
 
 	barplot!(
-		xs .- dodge/2,
-		df[:, :vf_mass];
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
 		width = barwidth,
 		label="Volume Fraction Mass"
 	)
 	barplot!(
-		xs .+ dodge/2,
-		df[:, :agatston_mass];
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
 		width=barwidth,
 		label="Agatston Mass"
 	)
@@ -187,29 +194,29 @@ let
 		color = :red
 	)
 	axislegend(ax)
-	
+
 	f
 end
 
-# ╔═╡ 46d64765-378a-4be0-8580-3100b9c1c03f
+# ╔═╡ 3f4ef699-35bf-4fd2-ad26-db546209d955
 md"""
-### (B) Density: 50 mg/cc, Diameter: 3.0 mm
+### (F) Density: 100 mg/cc, Diameter: 5.0 mm
 """
 
-# ╔═╡ 364ec563-1e66-4842-b078-4524dd5bf1d5
+# ╔═╡ 73a5d15e-aa2e-41a3-9755-9162cf5c1f3c
 let
     f = Figure()
 
-	df = b_df_80
-	xs = eachindex(df[:, :mAs])
+	df = f_df_80
+	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
 	ax = Axis(
 		f[1, 1],
 		title = extract_title(df),
 		ylabel = "Mass (mg)",
-		xlabel = "mAs",
-		xticks = (xs, string.(Int.(df[:, :mAs])))
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
 	)
 	
 
@@ -237,32 +244,34 @@ let
 	f
 end
 
-# ╔═╡ 8654ad36-c446-4771-b3e2-426f274de6ff
+# ╔═╡ ad2bc5af-404c-4dbb-8f18-8f8ec9c4737b
 let
     f = Figure()
 
-	df = b_df_100
-	xs = eachindex(df[:, :mAs])
+	rnge = 1:10
+
+	df = f_df_100
+	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
 	ax = Axis(
 		f[1, 1],
 		title = extract_title(df),
 		ylabel = "Mass (mg)",
-		xlabel = "mAs",
-		xticks = (xs, string.(Int.(df[:, :mAs])))
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
 	)
 	
 
 	barplot!(
-		xs .- dodge/2,
-		df[:, :vf_mass];
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
 		width = barwidth,
 		label="Volume Fraction Mass"
 	)
 	barplot!(
-		xs .+ dodge/2,
-		df[:, :agatston_mass];
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
 		width=barwidth,
 		label="Agatston Mass"
 	)
@@ -278,32 +287,34 @@ let
 	f
 end
 
-# ╔═╡ 989adba8-0f41-4d85-98a8-dce8ab91c522
+# ╔═╡ 83eec244-0fb4-4a66-8e13-235374e9af69
 let
     f = Figure()
 
-	df = b_df_120
-	xs = eachindex(df[:, :mAs])
+	rnge = 1:10
+
+	df = f_df_120
+	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
 	ax = Axis(
 		f[1, 1],
 		title = extract_title(df),
 		ylabel = "Mass (mg)",
-		xlabel = "mAs",
-		xticks = (xs, string.(Int.(df[:, :mAs])))
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
 	)
 	
 
 	barplot!(
-		xs .- dodge/2,
-		df[:, :vf_mass];
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
 		width = barwidth,
 		label="Volume Fraction Mass"
 	)
 	barplot!(
-		xs .+ dodge/2,
-		df[:, :agatston_mass];
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
 		width=barwidth,
 		label="Agatston Mass"
 	)
@@ -1700,4 +1711,173 @@ uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
 version = "1.0.0"
 
 [[deps.WorkerUtilities]]
-git-tree-sha1 = "cd1659ba
+git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
+uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
+version = "1.6.1"
+
+[[deps.XML2_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
+git-tree-sha1 = "52ff2af32e591541550bd753c0da8b9bc92bb9d9"
+uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
+version = "2.12.7+0"
+
+[[deps.XSLT_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
+git-tree-sha1 = "91844873c4085240b95e795f692c4cec4d805f8a"
+uuid = "aed1982a-8fda-507f-9586-7b0439959a61"
+version = "1.1.34+0"
+
+[[deps.Xorg_libX11_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xtrans_jll"]
+git-tree-sha1 = "afead5aba5aa507ad5a3bf01f58f82c8d1403495"
+uuid = "4f6342f7-b3d2-589e-9d20-edeb45f2b2bc"
+version = "1.8.6+0"
+
+[[deps.Xorg_libXau_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "6035850dcc70518ca32f012e46015b9beeda49d8"
+uuid = "0c0b7dd1-d40b-584c-a123-a41640f87eec"
+version = "1.0.11+0"
+
+[[deps.Xorg_libXdmcp_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "34d526d318358a859d7de23da945578e8e8727b7"
+uuid = "a3789734-cfe1-5b06-b2d0-1dd0d9d62d05"
+version = "1.1.4+0"
+
+[[deps.Xorg_libXext_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
+git-tree-sha1 = "d2d1a5c49fae4ba39983f63de6afcbea47194e85"
+uuid = "1082639a-0dae-5f34-9b06-72781eeb8cb3"
+version = "1.3.6+0"
+
+[[deps.Xorg_libXrender_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
+git-tree-sha1 = "47e45cd78224c53109495b3e324df0c37bb61fbe"
+uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
+version = "0.9.11+0"
+
+[[deps.Xorg_libpthread_stubs_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8fdda4c692503d44d04a0603d9ac0982054635f9"
+uuid = "14d82f49-176c-5ed1-bb49-ad3f5cbd8c74"
+version = "0.1.1+0"
+
+[[deps.Xorg_libxcb_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "XSLT_jll", "Xorg_libXau_jll", "Xorg_libXdmcp_jll", "Xorg_libpthread_stubs_jll"]
+git-tree-sha1 = "b4bfde5d5b652e22b9c790ad00af08b6d042b97d"
+uuid = "c7cfdc94-dc32-55de-ac96-5a1b8d977c5b"
+version = "1.15.0+0"
+
+[[deps.Xorg_xtrans_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "e92a1a012a10506618f10b7047e478403a046c77"
+uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
+version = "1.5.0+0"
+
+[[deps.Zlib_jll]]
+deps = ["Libdl"]
+uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.13+1"
+
+[[deps.isoband_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "51b5eeb3f98367157a7a12a1fb0aa5328946c03c"
+uuid = "9a68df92-36a6-505f-a73e-abb412b6bfb4"
+version = "0.2.3+0"
+
+[[deps.libaom_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "1827acba325fdcdf1d2647fc8d5301dd9ba43a9d"
+uuid = "a4ae2306-e953-59d6-aa16-d00cac43593b"
+version = "3.9.0+0"
+
+[[deps.libass_jll]]
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
+git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
+uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
+version = "0.15.1+0"
+
+[[deps.libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.8.0+1"
+
+[[deps.libfdk_aac_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
+uuid = "f638f0a6-7fb0-5443-88ba-1cc74229b280"
+version = "2.0.2+0"
+
+[[deps.libpng_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
+git-tree-sha1 = "d7015d2e18a5fd9a4f47de711837e980519781a4"
+uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
+version = "1.6.43+1"
+
+[[deps.libsixel_jll]]
+deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
+git-tree-sha1 = "d4f63314c8aa1e48cd22aa0c17ed76cd1ae48c3c"
+uuid = "075b6546-f08a-558a-be8f-8157d0f608a5"
+version = "1.10.3+0"
+
+[[deps.libvorbis_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
+git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
+version = "1.3.7+1"
+
+[[deps.nghttp2_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.52.0+1"
+
+[[deps.oneTBB_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "7d0ea0f4895ef2f5cb83645fa689e52cb55cf493"
+uuid = "1317d2d5-d96f-522e-a858-c73665f53c3e"
+version = "2021.12.0+0"
+
+[[deps.p7zip_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+2"
+
+[[deps.x264_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "4fea590b89e6ec504593146bf8b988b2c00922b2"
+uuid = "1270edf5-f2f9-52d2-97e9-ab00b5d0237a"
+version = "2021.5.5+0"
+
+[[deps.x265_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "ee567a171cce03570d77ad3a43e90218e38937a9"
+uuid = "dfaa095f-4041-5dcd-9319-2fabd8486b76"
+version = "3.5.0+0"
+"""
+
+# ╔═╡ Cell order:
+# ╠═6f6df7cc-2e6e-11ef-37a2-85991d0fbc5b
+# ╠═bdaca39d-dfc8-4d3a-a0f4-0943bcd62e12
+# ╠═e78bf131-14e6-4641-b60c-10b322f2a8e7
+# ╠═d1b9e06c-b0f6-4495-a379-c5ae336608fb
+# ╟─08844e29-31ce-43b6-951b-1794de2a40b6
+# ╠═2e38bd34-7a05-4325-ba90-d0e764e5611b
+# ╠═e2d5102b-1842-415c-b694-7f37be562937
+# ╠═98a9145b-0c7e-4277-b912-ffffd3b2b1a6
+# ╠═ba29fa79-c096-4da9-b6db-61b8ff1d158a
+# ╠═72c80245-ba42-48d5-82ba-846feaa5f2b8
+# ╠═9b72cccf-a2ae-4f41-a9a7-3266000cf265
+# ╟─9281994e-f515-4877-829c-2fadc7a1f9a4
+# ╠═88f23085-659e-4ce1-92f0-37cbb46f4d48
+# ╠═3f325f9c-44c0-4b5c-b9f8-45451ad3f221
+# ╟─fb5641cc-e158-4181-9c6c-819733d044bb
+# ╟─2230a4ab-dc36-4392-8872-d38ce6d22024
+# ╟─fe6af106-df3c-4439-ae86-75a77196dfdd
+# ╟─46406b42-67d1-4148-b939-d259709fe798
+# ╟─3f4ef699-35bf-4fd2-ad26-db546209d955
+# ╟─73a5d15e-aa2e-41a3-9755-9162cf5c1f3c
+# ╟─ad2bc5af-404c-4dbb-8f18-8f8ec9c4737b
+# ╟─83eec244-0fb4-4a66-8e13-235374e9af69
+# ╟─00000000-0000-0000-0000-000000000001
+# ╟─00000000-0000-0000-0000-000000000002

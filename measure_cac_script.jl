@@ -248,32 +248,32 @@ function create_mask(array, mask)
 end
 
 # ╔═╡ aae0aaec-8268-4765-a451-0bceb31dd6e2
-function calculate_thresholds(
-	kV, mAs;
-	mAs_arr = [10, 20, 40, 100, 150, 250]
-)
+function calculate_thresholds(kV, mA)
 	if kV == 80
+		mA_arr = [10, 20, 40, 100, 150, 250]
 		threshold_low_arr = [100, 80, 50, 20, 10, 0]
 		threshold_high_arr = [300, 255, 180, 90, 65, 40]
     elseif kV == 100
-		threshold_low_arr = [70, 55, 35, 31, 24, 20]
-		threshold_high_arr = [230, 150, 90, 83, 83, 80]
+		mA_arr = [10, 20, 40, 100, 150, 250]
+		threshold_low_arr = [70, 55, 35, 35, 29, 25]
+		threshold_high_arr = [230, 150, 90, 88, 83, 80]
     elseif kV == 120
-		threshold_low_arr = [40, 39, 38, 27, 23, 22]
-		threshold_high_arr = [150, 105, 95, 90, 88, 85]
+		mA_arr = [10, 15, 20, 25, 30, 40, 50, 100, 150, 250]
+		threshold_low_arr = [40, 40, 39, 39, 39, 39, 39, 35, 23, 22]
+		threshold_high_arr = [150, 110, 105, 100, 100, 95, 90, 90, 88, 85]
     end
 
-	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mAs_arr; extrapolate = true)
-	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mAs_arr; extrapolate = true)
+	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mA_arr; extrapolate = true)
+	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mA_arr; extrapolate = true)
 
-	threshold_low = threshold_low_interp(mAs)
-	threshold_high = threshold_high_interp(mAs)
+	threshold_low = threshold_low_interp(mA)
+	threshold_high = threshold_high_interp(mA)
     return threshold_low, threshold_high
 end
 
 # ╔═╡ 172d043b-c600-43e6-a75d-524bc9dd4955
-function threshold_low_high(dcm_arr, kV, mAs)
-    threshold_low, threshold_high = calculate_thresholds(kV, mAs)
+function threshold_low_high(dcm_arr, kV, mA)
+    threshold_low, threshold_high = calculate_thresholds(kV, mA)
 	thresholded_mask_low = dcm_arr .> threshold_low
     thresholded_mask_high = dcm_arr .< threshold_high
     masked_thresholded = thresholded_mask_high .& thresholded_mask_low
@@ -591,15 +591,25 @@ md"""
 ## Docs
 """
 
-# ╔═╡ eee22aed-7c7c-4421-98e6-8f04d0734165
+# ╔═╡ d6f176df-b323-4d74-b609-09a50b82a15d
 md"""
 !!! info ""
 	See `README.md` in the root directory for more info on the scans
+
+	NEED RESCAN:
 
 	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
+
+
+	Good:
+
+	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
+	| ---------------- | --------- | -------------- | --------------- | --------------- |
+	| 3082             | C_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3083             | F_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ 4f0f5767-5c26-4ae4-a28c-20ca9ed986ee
@@ -638,7 +648,7 @@ Type the folder path above, where you want the DICOM files to be saved (or use a
 """
 
 # ╔═╡ 4beb3247-28f0-4b30-b925-0061253ee304
-output_dir_temp = mktempdir()
+output_dir_temp = mktempdir() # r
 
 # ╔═╡ 87bc30a2-7b7e-4877-8618-aac5b44f88db
 function download_info(acc, ser, inst, save_folder_path)
@@ -647,7 +657,7 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3075"))
+				Child(TextField(default="3083"))
 			)""",
 			md""" $(ser): $(
 				Child(TextField(default="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31"))
@@ -709,7 +719,8 @@ begin
         insert_name = String[],
         beats_per_minute = String[],
 		kV = Float64[],
-        mAs = Float64[],
+        mA = Float64[],
+		ctdi = Float64[],
         gt_mass = Float64[],
         vf_mass = Float64[],
         agatston_mass = Float64[]
@@ -735,16 +746,17 @@ begin
 		insert_name = split(scan_name, "_")[1]
 		beats_per_minute = split(scan_name, "_")[2]
 		
-		mAs = header[(0x0018, 0x1151)]
+		mA = header[(0x0018, 0x1151)]
 		kV = header[(0x0018, 0x0060)]
+		ctdi = header[(0x0018, 0x9345)] # mGy
 		x_space, y_space = header[(0x0028, 0x0030)]
 		slice_thickness = header[(0x0018, 0x0050)]
 		pixel_size = [x_space, y_space, slice_thickness]
 	
 		# Mask Heart
-		mask_thresholded = threshold_low_high(dcm_arr, kV, mAs)
+		mask_thresholded = threshold_low_high(dcm_arr, kV, mA)
 		centroids = centroids_from_mask(mask_thresholded)
-		heart_rad = 100
+		heart_rad = 95
 		heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad)
 	
 		## Extract density
@@ -767,7 +779,7 @@ begin
 		dcm_heart = dcm_arr .* heart_mask
 		insert_threshold = 500
 		centers_a, centers_b = get_insert_centers(dcm_heart, insert_threshold)
-		cylinder_rad = diameter + 1.2
+		cylinder_rad = diameter * 2.0
 		cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25)
 		background_rad = cylinder_rad + 6
 		_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, background_rad, -25)
@@ -776,7 +788,8 @@ begin
 		binary_calibration = falses(size(dcm_heart))
 		binary_calibration[centers_a...] = true
 		binary_calibration = dilate(binary_calibration)
-		dcm_heart_clean = remove_outliers(dcm_heart[cylinder])
+		cylinder_clean = remove_outliers(dcm_heart[cylinder])
+		background_clean = remove_outliers(dcm_heart[background_ring])
 		
 		# Ground truth mass
 		num_inserts = 3
@@ -791,17 +804,17 @@ begin
 
 		## Calculate
 		voxel_size = pixel_size[1] * pixel_size[2] * pixel_size[3]
-		hu_heart_tissue_bkg = mean(dcm_heart[background_ring])
-		vf_mass = score(dcm_heart_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
+		hu_heart_tissue_bkg = mean(background_clean)
+		vf_mass = score(cylinder_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
 	
 		# Agatston
 		mass_cal_factor = ρ_calcium_400 / hu_calcium_400
-		agatston_agatston, agatston_volume, agatston_mass = score(dcm_heart_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+		agatston_agatston, agatston_volume, agatston_mass = score(cylinder_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
 
 		@info vf_mass, agatston_mass
 	
 		# Push results to DataFrame
-		push!(results_df, [insert_name, beats_per_minute, kV, mAs, gt_mass, vf_mass, agatston_mass])
+		push!(results_df, [insert_name, beats_per_minute, kV, mA, ctdi, gt_mass, vf_mass, agatston_mass])
     end
 
 	output_filename = joinpath(pwd(),"data","$(insert_name)_$(beats_per_minute).csv")
@@ -2699,7 +2712,7 @@ version = "3.5.0+0"
 # ╠═0b72af17-61fc-4b86-a338-8f86d32058fe
 # ╠═d61f577c-531a-4f16-a806-5bcfc64a94c2
 # ╟─da4739f0-4857-4b12-a5a9-bab91c543694
-# ╟─eee22aed-7c7c-4421-98e6-8f04d0734165
+# ╟─d6f176df-b323-4d74-b609-09a50b82a15d
 # ╟─4f0f5767-5c26-4ae4-a28c-20ca9ed986ee
 # ╟─96c15de9-3100-4d4d-b2e0-1380cf0ec31f
 # ╟─1c611a7b-a89c-4bd3-99cc-296a4ccf43a5
