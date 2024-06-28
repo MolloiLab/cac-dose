@@ -56,9 +56,6 @@ using OrderedCollections: OrderedDict
 # ╔═╡ 6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
 using DataInterpolations: QuadraticInterpolation
 
-# ╔═╡ b777df44-527f-4796-988b-2a4c99e3de6f
-using CairoMakie: lines!
-
 # ╔═╡ 544fe263-7d6d-4172-aa42-6bae0912e661
 md"""
 # Set Up
@@ -235,7 +232,7 @@ md"""
 ## Docs
 """
 
-# ╔═╡ 1fce1552-e97e-4eb2-89ad-5d245455b6e1
+# ╔═╡ d7d140aa-b442-4324-9539-d3660679c244
 md"""
 !!! info ""
 	See `README.md` in the root directory for more info on the scans
@@ -246,7 +243,7 @@ md"""
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
-
+	| 3089             | D_0bpm    | 2-11           | 12-21           | 22-31           |
 
 	Good:
 
@@ -254,6 +251,7 @@ md"""
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3082             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3083             | F_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3087             | E_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ d6670850-8f89-46fc-8db7-2617c58d656b
@@ -301,10 +299,10 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3083"))
+				Child(TextField(default="3089"))
 			)""",
 			md""" $(ser): $(
-				Child(TextField(default="11"))
+				Child(TextField(default="9"))
 			)""",
 			md""" $(inst): $(
 				Child(TextField(default="1"))
@@ -480,27 +478,6 @@ function centroids_from_mask(mask)
 	centroids = Int.(round.(component_centroids(label_components(new_mask))[end]))
 end
 
-# ╔═╡ b8141de4-fa7f-4420-aee9-3496a8b9f5e5
-begin
-	mA_arr = [10, 15, 20, 25, 30, 40, 50, 100, 150, 250]
-	threshold_low_arr = [40, 40, 39, 39, 39, 39, 39, 35, 23, 22]
-	threshold_high_arr = [150, 110, 105, 100, 100, 95, 90, 90, 88, 85]
-	threshold_low_interp = QuadraticInterpolation(threshold_low_arr, mA_arr; extrapolate = true)
-	threshold_high_interp = QuadraticInterpolation(threshold_high_arr, mA_arr; extrapolate = true)
-end;
-
-# ╔═╡ 05ce4939-28ec-46a9-848d-f0c71f39b807
-let
-	xspline = collect(10:0.1:250)
-	f = Figure()
-	ax = Axis(f[1, 1], xlabel = "mAs", ylabel = "HU", title = "kV = 80")
-	scatter!(mA_arr, threshold_low_arr; label = "lower thresh")
-	scatter!(mA_arr, threshold_high_arr; label = "upper thresh")
-	lines!(xspline, [threshold_low_interp(i) for i in xspline])
-	lines!(xspline, [threshold_high_interp(i) for i in xspline])
-	f
-end
-
 # ╔═╡ 9f2ca7e0-3c90-45d7-aad3-a4e21c37f022
 kV, mA
 
@@ -543,7 +520,7 @@ end
 mask_thresholded = threshold_low_high(dcm_arr, kV, mA);
 
 # ╔═╡ fcfbc9bf-87d0-4928-88ae-2b98edd4385a
-heatmap(mask_thresholded[:, :, 140])
+heatmap(mask_thresholded[:, :, 140]; colormap = :grays)
 
 # ╔═╡ 11494618-59d6-451f-8f91-a04f4e1a24d4
 centroids = centroids_from_mask(mask_thresholded)
@@ -781,6 +758,9 @@ if insert_name == "A" || insert_name == "B" || insert_name == "C"
 elseif insert_name == "D" || insert_name == "E" || insert_name == "F"
 	gt_density = 0.100  # mg/mm^3
 end
+
+# ╔═╡ 3d6adf79-8d1b-4ee3-b588-6bec6b80606a
+
 
 # ╔═╡ 0028adf1-cc3d-411a-875a-c7ebbb342500
 ## Extract diameter
@@ -2717,7 +2697,7 @@ version = "3.5.0+0"
 # ╠═edbbab37-598c-4773-bc69-7bf64b16a54e
 # ╠═3031e818-08df-4949-a549-9cb1e0c5edf3
 # ╟─58c2113f-6eb3-4ab4-a232-3c35281a0023
-# ╟─1fce1552-e97e-4eb2-89ad-5d245455b6e1
+# ╟─d7d140aa-b442-4324-9539-d3660679c244
 # ╟─d6670850-8f89-46fc-8db7-2617c58d656b
 # ╟─61519241-6d6a-48f7-aa4f-4e0d31a73811
 # ╟─c9b522be-cf22-4265-9021-f0f1a40887f7
@@ -2755,9 +2735,6 @@ version = "3.5.0+0"
 # ╠═38ec696f-7dad-47dd-b1ef-880f5424922e
 # ╠═1b5b2ad2-5aae-4cff-a58a-7d4a46e501cc
 # ╠═6dbf2dd0-8942-4f02-b5a3-b58427dedc1a
-# ╠═b8141de4-fa7f-4420-aee9-3496a8b9f5e5
-# ╠═b777df44-527f-4796-988b-2a4c99e3de6f
-# ╟─05ce4939-28ec-46a9-848d-f0c71f39b807
 # ╠═9f2ca7e0-3c90-45d7-aad3-a4e21c37f022
 # ╠═6088ace4-7a6a-491c-8546-1e1e686b9d34
 # ╠═411092cf-de9b-4206-af75-f45513b8b046
@@ -2801,6 +2778,7 @@ version = "3.5.0+0"
 # ╠═bc8312ed-4958-4362-b96c-fbb60ecfd8a9
 # ╠═835c6d36-708b-4f32-91df-33ec0abcb993
 # ╠═e71b73be-4ac0-4aff-a13b-516f812c606f
+# ╠═3d6adf79-8d1b-4ee3-b588-6bec6b80606a
 # ╠═0028adf1-cc3d-411a-875a-c7ebbb342500
 # ╠═6a9ab52a-2586-4d48-b035-7c7ec9ff7220
 # ╠═f231a0cc-1f9d-4bb0-b016-fe8e29357099

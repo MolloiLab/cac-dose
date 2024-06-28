@@ -33,6 +33,18 @@ c_df = read(joinpath(root_dir, "C_0bpm.csv"), DataFrame);
 # ╔═╡ 98a9145b-0c7e-4277-b912-ffffd3b2b1a6
 c_df_80, c_df_100, c_df_120 = groupby(c_df, :kV);
 
+# ╔═╡ 5de7241a-e47b-4a5b-96a4-3e29ba918dab
+d_df = read(joinpath(root_dir, "D_0bpm.csv"), DataFrame);
+
+# ╔═╡ c13fec95-b46d-4dea-aeda-e08fb91a6bc5
+d_df_80, d_df_100, d_df_120 = groupby(d_df, :kV);
+
+# ╔═╡ 51be6bd8-46a7-42eb-b97f-934da59a7970
+e_df = read(joinpath(root_dir, "E_0bpm.csv"), DataFrame);
+
+# ╔═╡ d4de246a-dbdd-4a37-9d91-c936e4a8c120
+e_df_80, e_df_100, e_df_120 = groupby(e_df, :kV);
+
 # ╔═╡ ba29fa79-c096-4da9-b6db-61b8ff1d158a
 f_df = read(joinpath(root_dir, "F_0bpm.csv"), DataFrame);
 
@@ -44,7 +56,7 @@ f_df
 
 # ╔═╡ 9281994e-f515-4877-829c-2fadc7a1f9a4
 md"""
-## Barplot
+## Barplots
 """
 
 # ╔═╡ 3f325f9c-44c0-4b5c-b9f8-45451ad3f221
@@ -162,6 +174,270 @@ let
 	rnge = 1:10
 
 	df = c_df_120
+	xs = eachindex(df[:, :mA])
+	dodge = 0.4  # Adjust the value as needed for desired spacing
+	barwidth = 0.5  # Adjust the value as needed for desired bar width
+	ax = Axis(
+		f[1, 1],
+		title = extract_title(df),
+		ylabel = "Mass (mg)",
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
+	)
+	
+
+	barplot!(
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
+		width = barwidth,
+		label="Volume Fraction Mass"
+	)
+	barplot!(
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
+		width=barwidth,
+		label="Agatston Mass"
+	)
+	hlines!(
+		df[:, :gt_mass][1];
+		xmin=0,
+		xmax=xs[end],
+		label="Ground Truth Mass",
+		color = :red
+	)
+	axislegend(ax)
+
+	f
+end
+
+# ╔═╡ 5d536775-3ccf-4fd4-a560-472ef7f2abfd
+md"""
+### (D) Density: 100 mg/cc, Diameter: 1.2 mm
+"""
+
+# ╔═╡ 094ead23-5696-48fc-9cb3-efeb557ea572
+let
+    f = Figure()
+
+	df = d_df_80
+	xs = eachindex(df[:, :mA])
+	dodge = 0.4  # Adjust the value as needed for desired spacing
+	barwidth = 0.5  # Adjust the value as needed for desired bar width
+	ax = Axis(
+		f[1, 1],
+		title = extract_title(df),
+		ylabel = "Mass (mg)",
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
+	)
+	
+
+	barplot!(
+		xs .- dodge/2,
+		df[:, :vf_mass];
+		width = barwidth,
+		label="Volume Fraction Mass"
+	)
+	barplot!(
+		xs .+ dodge/2,
+		df[:, :agatston_mass];
+		width=barwidth,
+		label="Agatston Mass"
+	)
+	hlines!(
+		df[:, :gt_mass][1];
+		xmin=0,
+		xmax=xs[end],
+		label="Ground Truth Mass",
+		color = :red
+	)
+	axislegend(ax)
+
+	f
+end
+
+# ╔═╡ ec29a37f-fafe-4bb3-bcf4-0bf9d347afed
+let
+    f = Figure()
+
+	rnge = 1:10
+
+	df = d_df_100
+	xs = eachindex(df[:, :mA])
+	dodge = 0.4  # Adjust the value as needed for desired spacing
+	barwidth = 0.5  # Adjust the value as needed for desired bar width
+	ax = Axis(
+		f[1, 1],
+		title = extract_title(df),
+		ylabel = "Mass (mg)",
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
+	)
+	
+
+	barplot!(
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
+		width = barwidth,
+		label="Volume Fraction Mass"
+	)
+	barplot!(
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
+		width=barwidth,
+		label="Agatston Mass"
+	)
+	hlines!(
+		df[:, :gt_mass][1];
+		xmin=0,
+		xmax=xs[end],
+		label="Ground Truth Mass",
+		color = :red
+	)
+	axislegend(ax)
+
+	f
+end
+
+# ╔═╡ a7b36d7c-e5b7-4375-841a-872dde257518
+let
+    f = Figure()
+
+	rnge = 1:10
+
+	df = d_df_120
+	xs = eachindex(df[:, :mA])
+	dodge = 0.4  # Adjust the value as needed for desired spacing
+	barwidth = 0.5  # Adjust the value as needed for desired bar width
+	ax = Axis(
+		f[1, 1],
+		title = extract_title(df),
+		ylabel = "Mass (mg)",
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
+	)
+	
+
+	barplot!(
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
+		width = barwidth,
+		label="Volume Fraction Mass"
+	)
+	barplot!(
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
+		width=barwidth,
+		label="Agatston Mass"
+	)
+	hlines!(
+		df[:, :gt_mass][1];
+		xmin=0,
+		xmax=xs[end],
+		label="Ground Truth Mass",
+		color = :red
+	)
+	axislegend(ax)
+
+	f
+end
+
+# ╔═╡ fb379775-62b9-4357-9fda-57c1040e6ff9
+md"""
+### (E) Density: 100 mg/cc, Diameter: 3.0 mm
+"""
+
+# ╔═╡ af1bbf1f-7f24-4013-b6e9-a4cee6ef30d0
+let
+    f = Figure()
+
+	df = e_df_80
+	xs = eachindex(df[:, :mA])
+	dodge = 0.4  # Adjust the value as needed for desired spacing
+	barwidth = 0.5  # Adjust the value as needed for desired bar width
+	ax = Axis(
+		f[1, 1],
+		title = extract_title(df),
+		ylabel = "Mass (mg)",
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
+	)
+	
+
+	barplot!(
+		xs .- dodge/2,
+		df[:, :vf_mass];
+		width = barwidth,
+		label="Volume Fraction Mass"
+	)
+	barplot!(
+		xs .+ dodge/2,
+		df[:, :agatston_mass];
+		width=barwidth,
+		label="Agatston Mass"
+	)
+	hlines!(
+		df[:, :gt_mass][1];
+		xmin=0,
+		xmax=xs[end],
+		label="Ground Truth Mass",
+		color = :red
+	)
+	axislegend(ax)
+
+	f
+end
+
+# ╔═╡ bfed6351-195b-48a8-b3d6-f3ed6c04f852
+let
+    f = Figure()
+
+	rnge = 1:10
+
+	df = e_df_100
+	xs = eachindex(df[:, :mA])
+	dodge = 0.4  # Adjust the value as needed for desired spacing
+	barwidth = 0.5  # Adjust the value as needed for desired bar width
+	ax = Axis(
+		f[1, 1],
+		title = extract_title(df),
+		ylabel = "Mass (mg)",
+		xlabel = "mA",
+		xticks = (xs, string.(Int.(df[:, :mA])))
+	)
+	
+
+	barplot!(
+		xs[rnge] .- dodge/2,
+		df[:, :vf_mass][rnge];
+		width = barwidth,
+		label="Volume Fraction Mass"
+	)
+	barplot!(
+		xs[rnge] .+ dodge/2,
+		df[:, :agatston_mass][rnge];
+		width=barwidth,
+		label="Agatston Mass"
+	)
+	hlines!(
+		df[:, :gt_mass][1];
+		xmin=0,
+		xmax=xs[end],
+		label="Ground Truth Mass",
+		color = :red
+	)
+	axislegend(ax)
+
+	f
+end
+
+# ╔═╡ aa16ecc7-5c7b-4705-b525-534d63b96f28
+let
+    f = Figure()
+
+	rnge = 1:10
+
+	df = e_df_120
 	xs = eachindex(df[:, :mA])
 	dodge = 0.4  # Adjust the value as needed for desired spacing
 	barwidth = 0.5  # Adjust the value as needed for desired bar width
@@ -1865,6 +2141,10 @@ version = "3.5.0+0"
 # ╠═2e38bd34-7a05-4325-ba90-d0e764e5611b
 # ╠═e2d5102b-1842-415c-b694-7f37be562937
 # ╠═98a9145b-0c7e-4277-b912-ffffd3b2b1a6
+# ╠═5de7241a-e47b-4a5b-96a4-3e29ba918dab
+# ╠═c13fec95-b46d-4dea-aeda-e08fb91a6bc5
+# ╠═51be6bd8-46a7-42eb-b97f-934da59a7970
+# ╠═d4de246a-dbdd-4a37-9d91-c936e4a8c120
 # ╠═ba29fa79-c096-4da9-b6db-61b8ff1d158a
 # ╠═72c80245-ba42-48d5-82ba-846feaa5f2b8
 # ╠═9b72cccf-a2ae-4f41-a9a7-3266000cf265
@@ -1875,6 +2155,14 @@ version = "3.5.0+0"
 # ╟─2230a4ab-dc36-4392-8872-d38ce6d22024
 # ╟─fe6af106-df3c-4439-ae86-75a77196dfdd
 # ╟─46406b42-67d1-4148-b939-d259709fe798
+# ╟─5d536775-3ccf-4fd4-a560-472ef7f2abfd
+# ╟─094ead23-5696-48fc-9cb3-efeb557ea572
+# ╟─ec29a37f-fafe-4bb3-bcf4-0bf9d347afed
+# ╟─a7b36d7c-e5b7-4375-841a-872dde257518
+# ╟─fb379775-62b9-4357-9fda-57c1040e6ff9
+# ╟─af1bbf1f-7f24-4013-b6e9-a4cee6ef30d0
+# ╟─bfed6351-195b-48a8-b3d6-f3ed6c04f852
+# ╟─aa16ecc7-5c7b-4705-b525-534d63b96f28
 # ╟─3f4ef699-35bf-4fd2-ad26-db546209d955
 # ╟─73a5d15e-aa2e-41a3-9755-9162cf5c1f3c
 # ╟─ad2bc5af-404c-4dbb-8f18-8f8ec9c4737b
