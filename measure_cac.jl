@@ -252,6 +252,7 @@ md"""
 	| 3082             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3083             | F_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3087             | E_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3093             | D_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ d6670850-8f89-46fc-8db7-2617c58d656b
@@ -299,7 +300,7 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3089"))
+				Child(TextField(default="3093"))
 			)""",
 			md""" $(ser): $(
 				Child(TextField(default="9"))
@@ -759,9 +760,6 @@ elseif insert_name == "D" || insert_name == "E" || insert_name == "F"
 	gt_density = 0.100  # mg/mm^3
 end
 
-# ╔═╡ 3d6adf79-8d1b-4ee3-b588-6bec6b80606a
-
-
 # ╔═╡ 0028adf1-cc3d-411a-875a-c7ebbb342500
 ## Extract diameter
 if insert_name == "A" || insert_name == "D"
@@ -776,10 +774,33 @@ end
 cylinder_rad = diameter * 2.0
 
 # ╔═╡ d8519bec-6ae8-4575-80be-6b2bfcb3fc84
-cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25);
+begin
+	cylinder = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad, -25)
+
+
+	off_num = 30
+	offa1 = (centers_a[1] + off_num, centers_a[2] + off_num, centers_a[3])
+	offb1 = (centers_b[1] + off_num, centers_b[2] + off_num, centers_b[3])
+
+	offa2 = (centers_a[1] - off_num, centers_a[2] - off_num, centers_a[3])
+	offb2 = (centers_b[1] - off_num, centers_b[2] - off_num, centers_b[3])
+
+	offa3 = (centers_a[1] + off_num, centers_a[2] - off_num, centers_a[3])
+	offb3 = (centers_b[1] + off_num, centers_b[2] - off_num, centers_b[3])
+	
+	offset_cylinder1 = create_cylinder(dcm_heart, offa1, offb1, cylinder_rad, -25)
+	offset_cylinder2 = create_cylinder(dcm_heart, offa2, offb2, cylinder_rad, -25)
+	offset_cylinder3 = create_cylinder(dcm_heart, offa3, offb3, cylinder_rad, -25)
+end;
 
 # ╔═╡ 4b767984-077e-4801-bfdb-5297a4ea637d
-cylinder_clean = remove_outliers(dcm_heart[cylinder]);
+begin
+	cylinder_clean = remove_outliers(dcm_heart[cylinder])
+	
+	offset_cylinder1_clean = remove_outliers(dcm_heart[offset_cylinder1])
+	offset_cylinder2_clean = remove_outliers(dcm_heart[offset_cylinder2])
+	offset_cylinder3_clean = remove_outliers(dcm_heart[offset_cylinder3])
+end;
 
 # ╔═╡ ad45ed1c-d103-449d-b8c4-49c56f465cde
 let
@@ -795,28 +816,62 @@ end
 
 # ╔═╡ 5d301dd8-e23b-4156-8538-9c626b5a9b0b
 begin
-	_background_ring = create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad + 6, -25);
-	background_ring = Bool.(_background_ring .- cylinder)
+	background_ring = Bool.(
+		create_cylinder(dcm_heart, centers_a, centers_b, cylinder_rad + 6, -25) .- cylinder
+	)
+
+	offset_background_ring1 = Bool.(
+		create_cylinder(dcm_heart, offa1, offb1, cylinder_rad + 6, -25) .- offset_cylinder1
+	)
+
+	offset_background_ring2 = Bool.(
+		create_cylinder(dcm_heart, offa2, offb2, cylinder_rad + 6, -25) .- offset_cylinder2
+	)
+
+	offset_background_ring3 = Bool.(
+		create_cylinder(dcm_heart, offa3, offb3, cylinder_rad + 6, -25) .- offset_cylinder3
+	)
 end;
 
 # ╔═╡ 309b2a1b-9760-47e3-b0be-00cf1a8716f8
 let
 	idxs = getindex.(findall(isone, cylinder[:, :, z]), [1 2])
 	idxs_ring = getindex.(findall(isone, background_ring[:, :, z]), [1 2])
-	α = 0.25
+	alpha = 0.25
 
-	f = Figure()
+	f = Figure(size = (800, 800))
 
-	ax = Axis(f[1, 1])
+	ax = Axis(f[1, 1], title = "Region Of Interest")
 	heatmap!(dcm_arr[:, :, z]; colormap = :grays)
-	heatmap!(cylinder[:, :, z]; colormap = (:viridis, 0.2))
-	heatmap!(background_ring[:, :, z]; colormap = (:jet, 0.2))
+	heatmap!(cylinder[:, :, z]; colormap = (:viridis, alpha))
+	heatmap!(background_ring[:, :, z]; colormap = (:jet, alpha))
 
+	ax = Axis(f[2, 1], title = "Offset Background 1")
+	heatmap!(dcm_arr[:, :, z]; colormap = :grays)
+	heatmap!(offset_cylinder1[:, :, z]; colormap = (:viridis, alpha))
+	heatmap!(offset_background_ring1[:, :, z]; colormap = (:jet, alpha))
+
+	ax = Axis(f[1, 2], title = "Offset Background 2")
+	heatmap!(dcm_arr[:, :, z]; colormap = :grays)
+	heatmap!(offset_cylinder2[:, :, z]; colormap = (:viridis, alpha))
+	heatmap!(offset_background_ring2[:, :, z]; colormap = (:jet, alpha))
+
+
+	ax = Axis(f[2, 2], title = "Offset Background 3")
+	heatmap!(dcm_arr[:, :, z]; colormap = :grays)
+	heatmap!(offset_cylinder3[:, :, z]; colormap = (:viridis, alpha))
+	heatmap!(offset_background_ring3[:, :, z]; colormap = (:jet, alpha))
 	f
 end
 
 # ╔═╡ b483e08a-3970-4825-b548-4b7a8026aeed
-background_clean = remove_outliers(dcm_heart[background_ring]);
+begin
+	background_clean = remove_outliers(dcm_heart[background_ring])
+	
+	offset_background_ring1_clean = remove_outliers(dcm_heart[offset_background_ring1])
+	offset_background_ring2_clean = remove_outliers(dcm_heart[offset_background_ring2])
+	offset_background_ring3_clean = remove_outliers(dcm_heart[offset_background_ring3])
+end;
 
 # ╔═╡ 6a9ab52a-2586-4d48-b035-7c7ec9ff7220
 num_inserts = 3
@@ -849,11 +904,32 @@ std(dcm_heart[binary_calibration])
 voxel_size = pixel_size[1] * pixel_size[2] * pixel_size[3]
 
 # ╔═╡ 79bc8e94-1568-49c2-a9c8-55b52427cbd1
-# hu_heart_tissue_bkg = mean(dcm_heart[background_ring])
-hu_heart_tissue_bkg = mean(background_clean)
+begin
+	hu_heart_tissue_bkg = mean(background_clean)
+	
+	hu_heart_tissue_bkg_offset1 = mean(offset_background_ring1_clean)
+	hu_heart_tissue_bkg_offset2 = mean(offset_background_ring2_clean)
+	hu_heart_tissue_bkg_offset3 = mean(offset_background_ring3_clean)
+end;
 
 # ╔═╡ 3163ccbd-e53f-42a9-9fa3-7fb5430104b7
 vf_mass = score(cylinder_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
+
+# ╔═╡ d9f8d148-0df8-4226-98e0-c24fec499553
+begin
+	vf_mass_offset1 = score(offset_cylinder1_clean, hu_calcium_400, hu_heart_tissue_bkg_offset1, voxel_size, ρ_calcium_400, VolumeFraction())
+	vf_mass_offset2 = score(offset_cylinder2_clean, hu_calcium_400, hu_heart_tissue_bkg_offset2, voxel_size, ρ_calcium_400, VolumeFraction())
+	vf_mass_offset3 = score(offset_cylinder3_clean, hu_calcium_400, hu_heart_tissue_bkg_offset3, voxel_size, ρ_calcium_400, VolumeFraction())
+end;
+
+# ╔═╡ fd18ea3a-fdf4-4bfa-827c-fe27cd8fd1af
+begin
+	vf_mass_bkg_mean = mean([vf_mass_offset1, vf_mass_offset2, vf_mass_offset3])
+	vf_mass_bkg_std = std([vf_mass_offset1, vf_mass_offset2, vf_mass_offset3])
+end;
+
+# ╔═╡ 78a2827c-95cc-490d-a35a-ad390849ab90
+vf_mass_bkg_mean, vf_mass_bkg_std
 
 # ╔═╡ f361009d-ce57-43dd-bde3-b27f20cd38df
 md"""
@@ -866,8 +942,24 @@ mass_cal_factor = ρ_calcium_400 / hu_calcium_400
 # ╔═╡ 66fbeffb-9012-43c2-b5b5-e96e0fd75e7e
 a_agatston, a_volume, a_mass = score(cylinder_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
 
+# ╔═╡ 20cf0cfc-ee39-4abb-b721-c531bb4b4013
+begin
+	_, _, a_mass_offset1 = score(offset_cylinder1_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+	_, _, a_mass_offset2 = score(offset_cylinder2_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+	_, _, a_mass_offset3 = score(offset_cylinder3_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+end;
+
+# ╔═╡ 458a7ead-d58b-45d0-9248-235d0c3dfd07
+begin
+	a_mass_bkg_mean = mean([a_mass_offset1, a_mass_offset2, a_mass_offset3])
+	a_mass_bkg_std = std([a_mass_offset1, a_mass_offset2, a_mass_offset3])
+end;
+
 # ╔═╡ 6fc57bee-0130-4624-b8f9-2b9f650b1e73
 a_mass
+
+# ╔═╡ 78b4440d-bc8a-4742-819c-3f2d5bffa7a0
+a_mass_bkg_mean, a_mass_bkg_std
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2778,7 +2870,6 @@ version = "3.5.0+0"
 # ╠═bc8312ed-4958-4362-b96c-fbb60ecfd8a9
 # ╠═835c6d36-708b-4f32-91df-33ec0abcb993
 # ╠═e71b73be-4ac0-4aff-a13b-516f812c606f
-# ╠═3d6adf79-8d1b-4ee3-b588-6bec6b80606a
 # ╠═0028adf1-cc3d-411a-875a-c7ebbb342500
 # ╠═6a9ab52a-2586-4d48-b035-7c7ec9ff7220
 # ╠═f231a0cc-1f9d-4bb0-b016-fe8e29357099
@@ -2791,9 +2882,15 @@ version = "3.5.0+0"
 # ╠═aae1984d-c2ec-4ffc-97f0-55a64017387c
 # ╠═79bc8e94-1568-49c2-a9c8-55b52427cbd1
 # ╠═3163ccbd-e53f-42a9-9fa3-7fb5430104b7
+# ╠═d9f8d148-0df8-4226-98e0-c24fec499553
+# ╠═fd18ea3a-fdf4-4bfa-827c-fe27cd8fd1af
+# ╠═78a2827c-95cc-490d-a35a-ad390849ab90
 # ╟─f361009d-ce57-43dd-bde3-b27f20cd38df
 # ╠═906e5abb-4bdf-4fd8-916e-c97644b97fa6
 # ╠═66fbeffb-9012-43c2-b5b5-e96e0fd75e7e
+# ╠═20cf0cfc-ee39-4abb-b721-c531bb4b4013
+# ╠═458a7ead-d58b-45d0-9248-235d0c3dfd07
 # ╠═6fc57bee-0130-4624-b8f9-2b9f650b1e73
+# ╠═78b4440d-bc8a-4742-819c-3f2d5bffa7a0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

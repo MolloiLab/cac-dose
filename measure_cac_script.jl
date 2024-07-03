@@ -596,21 +596,12 @@ md"""
 !!! info ""
 	See `README.md` in the root directory for more info on the scans
 
-	NEED RESCAN:
-
-	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
-	| ---------------- | --------- | -------------- | --------------- | --------------- |
-	| 3074             | A_0bpm    | 2-11           | 12-21           | 22-31           |
-	| 3075             | B_0bpm    | 2-11           | 12-21           | 22-31           |
-	| 3089             | D_0bpm    | 2-11           | 12-21           | 22-31           |
-
-	Good:
-
 	| Accession Number | Scan Name | Series (80 kV) | Series (100 kV) | Series (120 kV) |
 	| ---------------- | --------- | -------------- | --------------- | --------------- |
 	| 3082             | C_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3083             | F_0bpm    | 2-11           | 12-21           | 22-31           |
 	| 3087             | E_0bpm    | 2-11           | 12-21           | 22-31           |
+	| 3095             | D_0bpm    | 2-11           | 12-21           | 22-31           |
 """
 
 # ╔═╡ 4f0f5767-5c26-4ae4-a28c-20ca9ed986ee
@@ -658,7 +649,7 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3089"))
+				Child(TextField(default="3087"))
 			)""",
 			md""" $(ser): $(
 				Child(TextField(default="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31"))
@@ -709,34 +700,35 @@ instance_number = parse(Int64, instance_num)
 # ╔═╡ d60685cd-846f-4591-9908-2f2275a193d0
 instances_dicts
 
-# ╔═╡ 8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
+# ╔═╡ 08e918cd-0032-4f8e-be16-84f2b19d8291
 md"""
 # Run Script
 """
 
-# ╔═╡ 19b23f93-48b3-4c39-bcee-32b03d4f6f50
+# ╔═╡ b22040f6-5726-4551-af1d-b65ae876e83c
 begin
-    results_df = DataFrame(
-        insert_name = String[],
-        beats_per_minute = String[],
+	results_df = DataFrame(
+		insert_name = String[],
+		beats_per_minute = String[],
 		kV = Float64[],
-        mA = Float64[],
+		mA = Float64[],
 		ctdi = Float64[],
-        gt_mass = Float64[],
-        vf_mass = Float64[],
-        agatston_mass = Float64[]
-    )
+		gt_mass = Float64[],
+		vf_mass = Float64[],
+		vf_mass_bkg_mean = Float64[],
+		vf_mass_bkg_std = Float64[],
+		agatston_mass = Float64[],
+		agatston_mass_bkg_mean = Float64[],
+		agatston_mass_bkg_std = Float64[]
+	)
 
 	local insert_name
 	local beats_per_minute
-    for (i, dicts) in enumerate(instances_dicts)
+	for (i, dicts) in enumerate(instances_dicts)
 		@info i
-		@info dicts
-
 		output_paths = process_instances([dicts], series_num_vec[i], output_dir, instance_number, ip_address)
 		
 		output_path = output_paths[end]
-		@info output_path
 	
 		# Load DICOMs
 		dcms = dcmdir_parse(output_path)
@@ -792,6 +784,31 @@ begin
 		cylinder_clean = remove_outliers(dcm_heart[cylinder])
 		background_clean = remove_outliers(dcm_heart[background_ring])
 		
+		# Offset Measurements
+		off_num = 30
+		offa1 = (centers_a[1] + off_num, centers_a[2] + off_num, centers_a[3])
+		offb1 = (centers_b[1] + off_num, centers_b[2] + off_num, centers_b[3])
+		offa2 = (centers_a[1] - off_num, centers_a[2] - off_num, centers_a[3])
+		offb2 = (centers_b[1] - off_num, centers_b[2] - off_num, centers_b[3])
+		offa3 = (centers_a[1] + off_num, centers_a[2] - off_num, centers_a[3])
+		offb3 = (centers_b[1] + off_num, centers_b[2] - off_num, centers_b[3])
+		
+		offset_cylinder1 = create_cylinder(dcm_heart, offa1, offb1, cylinder_rad, -25)
+		offset_cylinder2 = create_cylinder(dcm_heart, offa2, offb2, cylinder_rad, -25)
+		offset_cylinder3 = create_cylinder(dcm_heart, offa3, offb3, cylinder_rad, -25)
+		
+		offset_background_ring1 = Bool.(create_cylinder(dcm_heart, offa1, offb1, background_rad, -25) .- offset_cylinder1)
+		offset_background_ring2 = Bool.(create_cylinder(dcm_heart, offa2, offb2, background_rad, -25) .- offset_cylinder2)
+		offset_background_ring3 = Bool.(create_cylinder(dcm_heart, offa3, offb3, background_rad, -25) .- offset_cylinder3)
+		
+		offset_cylinder1_clean = remove_outliers(dcm_heart[offset_cylinder1])
+		offset_cylinder2_clean = remove_outliers(dcm_heart[offset_cylinder2])
+		offset_cylinder3_clean = remove_outliers(dcm_heart[offset_cylinder3])
+		
+		offset_background_ring1_clean = remove_outliers(dcm_heart[offset_background_ring1])
+		offset_background_ring2_clean = remove_outliers(dcm_heart[offset_background_ring2])
+		offset_background_ring3_clean = remove_outliers(dcm_heart[offset_background_ring3])
+		
 		# Ground truth mass
 		num_inserts = 3
 		gt_length = 7 # mm
@@ -806,30 +823,47 @@ begin
 		## Calculate
 		voxel_size = pixel_size[1] * pixel_size[2] * pixel_size[3]
 		hu_heart_tissue_bkg = mean(background_clean)
+		hu_heart_tissue_bkg_offset1 = mean(offset_background_ring1_clean)
+		hu_heart_tissue_bkg_offset2 = mean(offset_background_ring2_clean)
+		hu_heart_tissue_bkg_offset3 = mean(offset_background_ring3_clean)
+		
 		vf_mass = score(cylinder_clean, hu_calcium_400, hu_heart_tissue_bkg, voxel_size, ρ_calcium_400, VolumeFraction())
+		vf_mass_offset1 = score(offset_cylinder1_clean, hu_calcium_400, hu_heart_tissue_bkg_offset1, voxel_size, ρ_calcium_400, VolumeFraction())
+		vf_mass_offset2 = score(offset_cylinder2_clean, hu_calcium_400, hu_heart_tissue_bkg_offset2, voxel_size, ρ_calcium_400, VolumeFraction())
+		vf_mass_offset3 = score(offset_cylinder3_clean, hu_calcium_400, hu_heart_tissue_bkg_offset3, voxel_size, ρ_calcium_400, VolumeFraction())
+		
+		vf_mass_bkg_mean = mean([vf_mass_offset1, vf_mass_offset2, vf_mass_offset3])
+		vf_mass_bkg_std = std([vf_mass_offset1, vf_mass_offset2, vf_mass_offset3])
 	
 		# Agatston
 		mass_cal_factor = ρ_calcium_400 / hu_calcium_400
 		agatston_agatston, agatston_volume, agatston_mass = score(cylinder_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+		
+		_, _, agatston_mass_offset1 = score(offset_cylinder1_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+		_, _, agatston_mass_offset2 = score(offset_cylinder2_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+		_, _, agatston_mass_offset3 = score(offset_cylinder3_clean, pixel_size, mass_cal_factor, Agatston(); kV=kV)
+		
+		agatston_mass_bkg_mean = mean([agatston_mass_offset1, agatston_mass_offset2, agatston_mass_offset3])
+		agatston_mass_bkg_std = std([agatston_mass_offset1, agatston_mass_offset2, agatston_mass_offset3])
 
-		@info vf_mass, agatston_mass
+		@info """
+		Ground Truth Mass: $(gt_mass) \n
+		Volume Fraction Mass: $(vf_mass) \n
+		Volume Fraction Background Mass Mean + Std: $((vf_mass_bkg_mean, vf_mass_bkg_std)) \n
+		Agatston Mass: $(agatston_mass) \n
+		Agatston Background Mass Mean + Std: $((agatston_mass_bkg_mean, agatston_mass_bkg_std))
+		"""
 	
 		# Push results to DataFrame
-		push!(results_df, [insert_name, beats_per_minute, kV, mA, ctdi, gt_mass, vf_mass, agatston_mass])
-    end
+		push!(results_df, [insert_name, beats_per_minute, kV, mA, ctdi, gt_mass, vf_mass, vf_mass_bkg_mean, vf_mass_bkg_std, agatston_mass, agatston_mass_bkg_mean, agatston_mass_bkg_std])
+	end
 
 	output_filename = joinpath(pwd(),"data","$(insert_name)_$(beats_per_minute).csv")
-    write(output_filename, results_df)
+	write(output_filename, results_df)
 end
 
 # ╔═╡ 4951072e-5546-4825-a12c-bb917df5995c
 results_df
-
-# ╔═╡ cfff3b8b-4b23-426f-849d-04a39c1dfde4
-
-
-# ╔═╡ fc36cbd3-83ad-4446-b95d-62aec7fb5142
-3000 / 60
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2734,10 +2768,8 @@ version = "3.5.0+0"
 # ╠═1cbc8875-8b23-4660-8eb6-543f31436c73
 # ╠═986a7b15-a441-412f-88a7-25f9648cfcbc
 # ╠═d60685cd-846f-4591-9908-2f2275a193d0
-# ╟─8e3fc2b5-18d0-4bce-bf74-5a7b56d61457
-# ╠═19b23f93-48b3-4c39-bcee-32b03d4f6f50
+# ╟─08e918cd-0032-4f8e-be16-84f2b19d8291
+# ╠═b22040f6-5726-4551-af1d-b65ae876e83c
 # ╠═4951072e-5546-4825-a12c-bb917df5995c
-# ╠═cfff3b8b-4b23-426f-849d-04a39c1dfde4
-# ╠═fc36cbd3-83ad-4446-b95d-62aec7fb5142
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
