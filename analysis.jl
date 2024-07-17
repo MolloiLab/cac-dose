@@ -54,14 +54,9 @@ f_df = read(joinpath(root_dir, "F_0bpm.csv"), DataFrame);
 # ╔═╡ 72c80245-ba42-48d5-82ba-846feaa5f2b8
 f_df_80, f_df_100, f_df_120 = groupby(f_df, :kV);
 
-# ╔═╡ 9281994e-f515-4877-829c-2fadc7a1f9a4
-md"""
-## Analysis
-"""
-
 # ╔═╡ 2185ffbf-94da-45fa-99ca-3a8bce152c80
 md"""
-### Helper Functions
+## Helper Functions
 """
 
 # ╔═╡ 8ac1e3cf-bb6d-4d3f-b946-0b40086ce606
@@ -107,241 +102,117 @@ function analyze_uncertainties(df_80, df_100, df_120)
 	return results_df
 end
 
+# ╔═╡ 686b9462-9a3b-4f52-90d1-52b46fc9c998
+function plot_mass_comparison(
+	df_80, df_100, df_120;
+	ylims = (-10, 100), yticks = 0:25:100
+)
+	f = Figure(size = (800, 1000))
+
+	for (i, (df, kv)) in enumerate(zip([df_80, df_100, df_120], ["80 kV", "100 kV", "120 kV"]))
+		xs = eachindex(df[:, :mA])
+		elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
+		dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
+		barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
+		ax = Axis(
+			f[i, 1],
+			title = "$kv",
+			ylabel = "Mass (mg)",
+			xlabel = "mA",
+			xticks = (xs, string.(Int.(df[:, :mA]))),
+			yticks = yticks
+		)
+		ylims!(low = ylims[1], high = ylims[2])
+
+		barplot!(
+			xs .- dodge * 1.5,
+			df[:, :vf_mass_bkg_mean];
+			label="Volume Fraction Background Mass",
+			width = barwidth,
+			color = :lightcyan2
+		)
+		errorbars!(
+			xs .- dodge * 1.5,
+			df[:, :vf_mass_bkg_mean],
+			df[:, :vf_mass_bkg_std];
+			whiskerwidth = 10,
+			linewidth = 1,
+			color = :black,
+		)
+		barplot!(
+			xs .- dodge * 0.5,
+			df[:, :vf_mass];
+			label="Volume Fraction Mass",
+			width = barwidth,
+			color = :cyan3
+		)
+		barplot!(
+			xs .+ dodge * 0.5,
+			df[:, :agatston_mass_bkg_mean];
+			label="Agatston Background Mass",
+			width = barwidth,
+			color = :palevioletred2
+		)
+		errorbars!(
+			xs .+ dodge * 0.5,
+			df[:, :agatston_mass_bkg_mean],
+			df[:, :agatston_mass_bkg_std];
+			whiskerwidth = 10,
+			linewidth = 1,
+			color = :black
+		)
+		barplot!(
+			xs .+ dodge * 1.5,
+			df[:, :agatston_mass];
+			label="Agatston Mass",
+			width = barwidth,
+			color = :palevioletred4
+		)
+
+		hlines!(
+			df[:, :gt_mass][1];
+			xmin = 0,
+			xmax = xs[end] + 0.5,
+			label = "Ground Truth Mass",
+			color = :green,
+			linestyle = :dash
+		)
+	end
+
+	elements = [
+		PolyElement(color = :lightcyan2),
+		PolyElement(color = :cyan3),
+		PolyElement(color = :palevioletred2),
+		PolyElement(color = :palevioletred4),
+		LineElement(color = :green, linestyle = :dash)
+	]
+	labels = [
+		"Volume Fraction \nBackground Mass",
+		"Volume Fraction \nMass",
+		"Agatston \nBackground Mass",
+		"Agatston Mass",
+		"Ground Truth \nMass"
+	]
+	legend = Legend(f[2, 2], elements, labels, "Legend", framevisible = false)
+
+	return f
+end
+
+# ╔═╡ 9281994e-f515-4877-829c-2fadc7a1f9a4
+md"""
+## Analysis
+"""
+
 # ╔═╡ fb5641cc-e158-4181-9c6c-819733d044bb
 md"""
 ### (C) Density: 50 mg/cc, Diameter: 5.0 mm
 """
 
-# ╔═╡ 13f01414-5edd-4933-bf0f-72a1c94cafc0
-let 
-	f = Figure(size = (800, 1000))
-
-	df = c_df_80
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[1, 1],
-		title = "80 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:25:100
-	)
-	ylims!(low = -10, high = 100)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = c_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[2, 1],
-		title = "100 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:25:100
-	)
-	ylims!(low = -10, high = 100)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = c_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[3, 1],
-		title = "120 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:25:100
-	)
-	ylims!(low = -10, high = 100)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-	
-    elements = [
-        PolyElement(color = :lightcyan2),
-        PolyElement(color = :cyan3),
-        PolyElement(color = :palevioletred2),
-        PolyElement(color = :palevioletred4),
-        LineElement(color = :green, linestyle = :dash)
-    ]
-    labels = [
-        "Volume Fraction \nBackground Mass",
-        "Volume Fraction \nMass",
-        "Agatston \nBackground Mass",
-        "Agatston Mass",
-        "Ground Truth \nMass"
-    ]
-    legend = Legend(f[2, 2], elements, labels, "Legend", framevisible = false)
-
-
-	f
-end
+# ╔═╡ d6c226b9-8a6f-49ee-b5ff-3d80eb6f1fb6
+plot_mass_comparison(
+	c_df_80, c_df_100, c_df_120;
+	ylims = (-10, 100), yticks = 0:25:100
+)
 
 # ╔═╡ a36fcd41-33a0-47cc-ac4f-a07203f9771d
 results_c_df = analyze_uncertainties(c_df_80, c_df_100, c_df_120)
@@ -351,236 +222,11 @@ md"""
 ### (D) Density: 100 mg/cc, Diameter: 1.2 mm
 """
 
-# ╔═╡ c334983f-c16e-4f5d-be73-580b2eec149b
-let 
-	f = Figure(size = (800, 1000))
-
-	df = d_df_80
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[1, 1],
-		title = "80 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:5
-	)
-	ylims!(low = -1, high = 5)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = d_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[2, 1],
-		title = "100 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:5
-	)
-	ylims!(low = -1, high = 5)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = d_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[3, 1],
-		title = "120 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:5
-	)
-	ylims!(low = -1, high = 5)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-	
-    elements = [
-        PolyElement(color = :lightcyan2),
-        PolyElement(color = :cyan3),
-        PolyElement(color = :palevioletred2),
-        PolyElement(color = :palevioletred4),
-        LineElement(color = :green, linestyle = :dash)
-    ]
-    labels = [
-        "Volume Fraction \nBackground Mass",
-        "Volume Fraction \nMass",
-        "Agatston \nBackground Mass",
-        "Agatston Mass",
-        "Ground Truth \nMass"
-    ]
-    legend = Legend(f[2, 2], elements, labels, "Legend", framevisible = false)
-
-
-	f
-end
+# ╔═╡ b5fc2168-006c-4a3c-9d86-49d70b4f30f7
+plot_mass_comparison(
+	d_df_80, d_df_100, d_df_120;
+	ylims = (-1, 5), yticks = 0:5
+)
 
 # ╔═╡ 48489a26-0b14-4228-b464-97e2696cefcd
 results_d_df = analyze_uncertainties(d_df_80, d_df_100, d_df_120)
@@ -590,236 +236,11 @@ md"""
 ### (E) Density: 100 mg/cc, Diameter: 3.0 mm
 """
 
-# ╔═╡ 137b3fd2-7a6f-49d8-8e56-d53be908e408
-let 
-	f = Figure(size = (800, 1000))
-
-	df = e_df_80
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[1, 1],
-		title = "80 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:5:45
-	)
-	ylims!(low = -5, high = 45)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = e_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[2, 1],
-		title = "100 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:5:45
-	)
-	ylims!(low = -5, high = 45)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = e_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[3, 1],
-		title = "120 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:5:45
-	)
-	ylims!(low = -5, high = 45)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-	
-    elements = [
-        PolyElement(color = :lightcyan2),
-        PolyElement(color = :cyan3),
-        PolyElement(color = :palevioletred2),
-        PolyElement(color = :palevioletred4),
-        LineElement(color = :green, linestyle = :dash)
-    ]
-    labels = [
-        "Volume Fraction \nBackground Mass",
-        "Volume Fraction \nMass",
-        "Agatston \nBackground Mass",
-        "Agatston Mass",
-        "Ground Truth \nMass"
-    ]
-    legend = Legend(f[2, 2], elements, labels, "Legend", framevisible = false)
-
-
-	f
-end
+# ╔═╡ a984a9aa-4a05-4713-833a-6d44d4db6870
+plot_mass_comparison(
+	e_df_80, e_df_100, e_df_120;
+	ylims = (-10, 35), yticks = 0:5:35
+)
 
 # ╔═╡ 8101daa2-c556-4f3f-8321-7572663750c9
 results_e_df = analyze_uncertainties(e_df_80, e_df_100, e_df_120)
@@ -829,236 +250,11 @@ md"""
 ### (F) Density: 100 mg/cc, Diameter: 5.0 mm
 """
 
-# ╔═╡ a1bc7838-8ca1-4053-b1ae-4dcac5cf92e9
-let 
-	f = Figure(size = (800, 1000))
-
-	df = f_df_80
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[1, 1],
-		title = "80 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:20:140
-	)
-	ylims!(low = -20, high = 140)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = f_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[2, 1],
-		title = "100 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:20:140
-	)
-	ylims!(low = -20, high = 140)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-
-	df = f_df_100
-	xs = eachindex(df[:, :mA])
-	elements_per_xtick = 4  # Number of elements per x-tick (excluding ground truth line)
-	dodge = 1 / (elements_per_xtick + 1)  # Calculate dodge value
-	barwidth = dodge * 1.1  # Calculate bar width (110% of dodge value)
-	ax = Axis(
-		f[3, 1],
-		title = "120 kV",
-		ylabel = "Mass (mg)",
-		xlabel = "mA",
-		xticks = (xs, string.(Int.(df[:, :mA]))),
-		yticks = 0:20:140
-	)
-	ylims!(low = -20, high = 140)
-
-	barplot!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean];
-		label="Volume Fraction Background Mass",
-		width = barwidth,
-		color = :lightcyan2
-	)
-	errorbars!(
-		xs .- dodge * 1.5,
-		df[:, :vf_mass_bkg_mean],
-		df[:, :vf_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black,
-	)
-	barplot!(
-		xs .- dodge * 0.5,
-		df[:, :vf_mass];
-		label="Volume Fraction Mass",
-		width = barwidth,
-		color = :cyan3
-	)
-	barplot!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean];
-		label="Agatston Background Mass",
-		width = barwidth,
-		color = :palevioletred2
-	)
-	errorbars!(
-		xs .+ dodge * 0.5,
-		df[:, :agatston_mass_bkg_mean],
-		df[:, :agatston_mass_bkg_std];
-		whiskerwidth = 10,
-		linewidth = 1,
-		color = :black
-	)
-	barplot!(
-		xs .+ dodge * 1.5,
-		df[:, :agatston_mass];
-		label="Agatston Mass",
-		width = barwidth,
-		color = :palevioletred4
-	)
-
-	hlines!(
-		df[:, :gt_mass][1];
-		xmin = 0,
-		xmax = xs[end] + 0.5,
-		label = "Ground Truth Mass",
-		color = :green,
-		linestyle = :dash
-	)
-	
-    elements = [
-        PolyElement(color = :lightcyan2),
-        PolyElement(color = :cyan3),
-        PolyElement(color = :palevioletred2),
-        PolyElement(color = :palevioletred4),
-        LineElement(color = :green, linestyle = :dash)
-    ]
-    labels = [
-        "Volume Fraction \nBackground Mass",
-        "Volume Fraction \nMass",
-        "Agatston \nBackground Mass",
-        "Agatston Mass",
-        "Ground Truth \nMass"
-    ]
-    legend = Legend(f[2, 2], elements, labels, "Legend", framevisible = false)
-
-
-	f
-end
+# ╔═╡ 1a0f5672-a427-4081-8bc1-60abe1c70dd3
+plot_mass_comparison(
+	f_df_80, f_df_100, f_df_120;
+	ylims = (-20, 120), yticks = 0:20:120
+)
 
 # ╔═╡ 5c3fac6f-b4b5-4256-a7da-987a9ac197ca
 results_f_df = analyze_uncertainties(f_df_80, f_df_100, f_df_120)
@@ -2610,18 +1806,19 @@ version = "3.5.0+0"
 # ╠═8ac1e3cf-bb6d-4d3f-b946-0b40086ce606
 # ╠═dbce0469-5484-4851-95f1-6c8e41fd7792
 # ╠═78e9627a-33f2-4ee2-9318-336f8566e083
+# ╠═686b9462-9a3b-4f52-90d1-52b46fc9c998
 # ╟─9281994e-f515-4877-829c-2fadc7a1f9a4
 # ╟─fb5641cc-e158-4181-9c6c-819733d044bb
-# ╟─13f01414-5edd-4933-bf0f-72a1c94cafc0
+# ╠═d6c226b9-8a6f-49ee-b5ff-3d80eb6f1fb6
 # ╠═a36fcd41-33a0-47cc-ac4f-a07203f9771d
 # ╟─5d536775-3ccf-4fd4-a560-472ef7f2abfd
-# ╟─c334983f-c16e-4f5d-be73-580b2eec149b
+# ╠═b5fc2168-006c-4a3c-9d86-49d70b4f30f7
 # ╠═48489a26-0b14-4228-b464-97e2696cefcd
 # ╟─fb379775-62b9-4357-9fda-57c1040e6ff9
-# ╟─137b3fd2-7a6f-49d8-8e56-d53be908e408
+# ╠═a984a9aa-4a05-4713-833a-6d44d4db6870
 # ╠═8101daa2-c556-4f3f-8321-7572663750c9
 # ╟─3f4ef699-35bf-4fd2-ad26-db546209d955
-# ╟─a1bc7838-8ca1-4053-b1ae-4dcac5cf92e9
+# ╠═1a0f5672-a427-4081-8bc1-60abe1c70dd3
 # ╠═5c3fac6f-b4b5-4256-a7da-987a9ac197ca
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
