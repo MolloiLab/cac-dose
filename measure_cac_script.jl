@@ -649,7 +649,7 @@ function download_info(acc, ser, inst, save_folder_path)
 		
 		inputs = [
 			md""" $(acc): $(
-				Child(TextField(default="3087"))
+				Child(TextField(default="3082"))
 			)""",
 			md""" $(ser): $(
 				Child(TextField(default="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31"))
@@ -746,9 +746,11 @@ begin
 		slice_thickness = header[(0x0018, 0x0050)]
 		pixel_size = [x_space, y_space, slice_thickness]
 	
-		# Mask Heart
-		mask_thresholded = threshold_low_high(dcm_arr, kV, mA)
-		centroids = centroids_from_mask(mask_thresholded)
+		# # Mask Heart
+		# mask_thresholded = threshold_low_high(dcm_arr, kV, mA)
+		# centroids = centroids_from_mask(mask_thresholded)
+
+		centroids = div.(size(dcm_arr), 2)
 		heart_rad = 95
 		heart_mask = create_circle_mask(dcm_arr[:, :, 3], centroids, heart_rad)
 	
